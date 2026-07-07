@@ -1,0 +1,48 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.claude
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- frontend (Node/Vite) ---
+node_modules/
+dist/
+dist-ssr/
+build/
+.pnp
+.pnp.js
+*.tsbuildinfo
+coverage/
+*.local
+
+# --- backend (Python/uv) ---
+__pycache__/
+*.py[oc]
+*.egg-info
+wheels/
+.venv
+.mypy_cache
+.pytest_cache
+.ruff_cache
