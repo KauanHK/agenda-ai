@@ -62,7 +62,9 @@ def validate_cpf(value: str) -> str:
         raise ValueError("CPF inválido.")
 
     def calc_digit(digits: str, weight: int) -> int:
-        total = sum(int(d) * w for d, w in zip(digits, range(weight, 1, -1)))
+        total = sum(
+            int(d) * w for d, w in zip(digits, range(weight, 1, -1), strict=False)
+        )
         remainder = (total * 10) % 11
         return 0 if remainder == 10 else remainder
 

@@ -3,6 +3,8 @@ from math import ceil
 
 from pydantic import BaseModel, Field, computed_field
 
+from app.core.pagination.params import Page
+
 
 class PaginationParams(BaseModel):
     page: int = Field(default=1, ge=1)
@@ -57,4 +59,26 @@ def build_paginated_response[T](
         total=total,
         page=params.page,
         size=params.size,
+    )
+
+
+def build_paginated_response_from_page[T](page: Page[T]) -> PaginatedResponse[T]:
+    """
+    Constrói uma resposta paginada a partir de uma `Page` da camada de aplicação.
+
+    Args:
+        page (Page[T]):
+            A página de resultados retornada por um repositório/use case.
+
+    Returns:
+        PaginatedResponse[T]:
+            A resposta paginada correspondente, mantendo o contrato JSON atual
+            (`data`, `total`, `page`, `size`, `total_pages`).
+    """
+
+    return PaginatedResponse[T](
+        data=list(page.items),
+        total=page.total,
+        page=page.page,
+        size=page.page_size,
     )

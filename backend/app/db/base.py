@@ -1,5 +1,5 @@
-from sqlalchemy.orm import DeclarativeBase
+"""Compat: a `Base` agora vive em `app.core.db.base`. Re-export para imports antigos."""
 
+from app.core.db.base import Base
 
-class Base(DeclarativeBase):
-    """Base class para os models SQLAlchemy da aplicação."""
+__all__ = ["Base"]

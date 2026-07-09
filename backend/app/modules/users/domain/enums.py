@@ -1,6 +1,5 @@
-import enum
+"""Compat: `UserRole` agora vive em `app.core.roles`. Re-export para imports antigos."""
 
+from app.core.roles import UserRole
 
-class UserRole(enum.StrEnum):
-    ESTABLISHMENT_ADMIN = "establishment_admin"
-    MEMBER = "member"
+__all__ = ["UserRole"]

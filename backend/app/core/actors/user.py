@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import dataclass
 
-from app.modules.users.domain.enums import UserRole
+from app.core.roles import UserRole
 
 
 @dataclass(frozen=True, slots=True)

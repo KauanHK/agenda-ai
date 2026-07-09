@@ -15,8 +15,8 @@ def database() -> DataBase:
 @pytest.fixture
 def initialized_database(database: DataBase) -> DataBase:
     with (
-        patch("app.db.session.create_async_engine") as mock_engine,
-        patch("app.db.session.async_sessionmaker") as mock_sessionmaker,
+        patch("app.core.db.session.create_async_engine") as mock_engine,
+        patch("app.core.db.session.async_sessionmaker") as mock_sessionmaker,
     ):
         mock_engine.return_value = MagicMock()
         mock_sessionmaker.return_value = MagicMock()
@@ -32,9 +32,9 @@ def test_init_state_is_none(database: DataBase):
 def test_init_creates_engine_and_session_factory(database: DataBase):
 
     with (
-        patch("app.db.session.create_async_engine") as mock_engine,
-        patch("app.db.session.async_sessionmaker") as mock_sessionmaker,
-        patch("app.db.session.settings") as mock_settings,
+        patch("app.core.db.session.create_async_engine") as mock_engine,
+        patch("app.core.db.session.async_sessionmaker") as mock_sessionmaker,
+        patch("app.core.db.session.settings") as mock_settings,
     ):
         mock_settings.sqlalchemy_database_uri = DATABASE_URL
         mock_engine.return_value = MagicMock()
@@ -56,9 +56,9 @@ def test_init_is_idempotent(database: DataBase):
     """Segunda chamada ao init() não deve recriar engine e session_factory."""
 
     with (
-        patch("app.db.session.create_async_engine") as mock_engine,
-        patch("app.db.session.async_sessionmaker") as mock_sessionmaker,
-        patch("app.db.session.settings") as mock_settings,
+        patch("app.core.db.session.create_async_engine") as mock_engine,
+        patch("app.core.db.session.async_sessionmaker") as mock_sessionmaker,
+        patch("app.core.db.session.settings") as mock_settings,
     ):
         mock_settings.sqlalchemy_database_uri = DATABASE_URL
         mock_engine.return_value = MagicMock()
@@ -103,9 +103,9 @@ async def test_close_allows_reinit(initialized_database: DataBase):
     await initialized_database.close()
 
     with (
-        patch("app.db.session.create_async_engine") as mock_engine,
-        patch("app.db.session.async_sessionmaker") as mock_sessionmaker,
-        patch("app.db.session.settings") as mock_settings,
+        patch("app.core.db.session.create_async_engine") as mock_engine,
+        patch("app.core.db.session.async_sessionmaker") as mock_sessionmaker,
+        patch("app.core.db.session.settings") as mock_settings,
     ):
         mock_settings.sqlalchemy_database_uri = DATABASE_URL
         mock_engine.return_value = MagicMock()

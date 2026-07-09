@@ -1,12 +1,13 @@
+"""Compat: a `BaseSchema` agora vive em `app.core.schemas`. Re-export para imports
+antigos."""
+
 from datetime import datetime
 
-from pydantic import UUID7, BaseModel, ConfigDict
+from pydantic import UUID7, BaseModel
 
+from app.core.schemas import BaseSchema
 
-class BaseSchema(BaseModel):
-    """Base com config ORM-friendly."""
-
-    model_config = ConfigDict(from_attributes=True)
+__all__ = ["BaseSchema", "EstablishmentScoped", "TimestampMixin"]
 
 
 class TimestampMixin(BaseModel):
