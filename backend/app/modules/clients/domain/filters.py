@@ -1,8 +1,6 @@
-from dataclasses import dataclass
+"""Compat: os filtros agora vivem em
+`app.modules.clients.application.dtos.filters`. Re-export para imports antigos."""
 
+from app.modules.clients.application.dtos.filters import ClientFilters
 
-@dataclass
-class ClientFilters:
-    q: str | None = None
-    is_active: bool | None = None
-    establishment_id: str | None = None
+__all__ = ["ClientFilters"]
