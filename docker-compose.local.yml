@@ -9,8 +9,8 @@
 #   /mcp     → mcp        (exposta também em http://localhost:8001/mcp p/ o Inspector)
 #   db       → localhost:5432   redis → localhost:6379
 #
-# Segredos (JWT, Google, Evolution, AGENT_SESSION_SECRET) vêm de backend/.env.local.
-# As variáveis de conexão com db/redis são fixadas abaixo e sobrescrevem o .env.local.
+# Segredos (JWT, Google, Evolution, AGENT_SESSION_SECRET) vêm do .env na raiz.
+# As variáveis de conexão com db/redis são fixadas abaixo e sobrescrevem o .env.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: agenda-local
@@ -29,7 +29,7 @@ x-backend: &backend
     context: ./backend
     dockerfile: Dockerfile
   restart: unless-stopped
-  env_file: ./backend/.env.local
+  env_file: ./.env
   environment: *backend-env
   depends_on:
     db:
