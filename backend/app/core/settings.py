@@ -1,12 +1,20 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# .env único, na raiz do projeto (backend/app/core/settings.py -> raiz).
+# Em container o arquivo não existe (as variáveis vêm do env_file do compose)
+# e pydantic-settings simplesmente ignora o caminho ausente.
+_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_ENV_FILE,
         env_file_encoding="utf-8",
         case_sensitive=False,
-        extra="forbid",
+        # o .env é compartilhado com o frontend (VITE_*), então não dá pra proibir extras
+        extra="ignore",
     )
 
     DATABASE_URL: str | None = None

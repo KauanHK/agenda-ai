@@ -13,7 +13,7 @@
 #   docker network create web        # uma vez, antes do primeiro up
 #   docker network connect web <container-nginx-do-servidor>
 #
-# Requer na VPS: /opt/agenda-bot/backend/.env  (ver backend/.env.example)
+# Requer na VPS: /opt/agenda-bot/.env  (ver .env.example)
 # Para subir/testar localmente use docker-compose.local.yml.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -25,7 +25,7 @@ x-backend: &backend
     args:
       BUILDKIT_INLINE_CACHE: "1"
   restart: unless-stopped
-  env_file: ./backend/.env
+  env_file: ./.env
   networks:
     - backend
   depends_on:
@@ -71,7 +71,7 @@ services:
   db:
     image: postgres:17-alpine
     restart: unless-stopped
-    env_file: ./backend/.env
+    env_file: ./.env
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
@@ -85,7 +85,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    env_file: ./backend/.env
+    env_file: ./.env
     command: >
       sh -c 'redis-server --requirepass "$$REDIS_PASSWORD" --save "" --appendonly no'
     networks:
