@@ -1,6 +1,6 @@
-import enum
+"""Compat: `DocumentType` agora vive em `app.modules.establishments.domain.enums`.
+Re-export para imports antigos."""
 
+from app.modules.establishments.domain.enums import DocumentType
 
-class DocumentType(enum.Enum):
-    CPF = "cpf"
-    CNPJ = "cnpj"
+__all__ = ["DocumentType"]

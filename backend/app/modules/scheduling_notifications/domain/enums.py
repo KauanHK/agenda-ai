@@ -1,7 +1,7 @@
 import enum
 
 
-class NotificationStatus(str, enum.Enum):
+class NotificationStatus(enum.StrEnum):
     pending = "pending"
     sent = "sent"
     cancelled = "cancelled"

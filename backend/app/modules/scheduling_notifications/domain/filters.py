@@ -1,15 +1,9 @@
-import uuid
-from dataclasses import dataclass
-from datetime import datetime
+"""Compat: os filtros agora vivem em
+`app.modules.scheduling_notifications.application.dtos.filters`. Re-export para
+imports antigos."""
 
-from app.modules.scheduling_notifications.domain.enums import NotificationStatus
+from app.modules.scheduling_notifications.application.dtos.filters import (
+    SchedulingNotificationFilters,
+)
 
-
-@dataclass
-class SchedulingNotificationFilters:
-    establishment_id: uuid.UUID | None = None
-    scheduling_id: uuid.UUID | None = None
-    template_id: uuid.UUID | None = None
-    status: NotificationStatus | None = None
-    sent_at_from: datetime | None = None
-    sent_at_to: datetime | None = None
+__all__ = ["SchedulingNotificationFilters"]

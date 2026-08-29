@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
@@ -42,7 +42,9 @@ async def test_create_scheduling_calls_notifications_creator():
     establishment_id = uuid.uuid7()
     actor = _make_actor(establishment_id)
     # Monday noon BRT = Monday 15:00 UTC, safely in the future
-    starts_at = datetime(2026, 6, 8, 15, 0, tzinfo=UTC)
+    today = datetime.now(tz=UTC)
+    next_monday = today + timedelta(days=(7 - today.weekday()) % 7 or 7)
+    starts_at = next_monday.replace(hour=15, minute=0, second=0, microsecond=0)
     starts_local = starts_at.astimezone(_TZ)
 
     user = MagicMock(spec=User)

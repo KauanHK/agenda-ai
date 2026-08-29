@@ -1,8 +1,3 @@
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True, slots=True)
-class EstablishmentFilters:
-    name: str | None = None
-    document: str | None = None
-    timezone: str | None = None
+from app.modules.establishments.application.dtos.filters import (  # noqa: F401
+    EstablishmentFilters,
+)

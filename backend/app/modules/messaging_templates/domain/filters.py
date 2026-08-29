@@ -1,10 +1,9 @@
-import uuid
-from dataclasses import dataclass
+"""Compat: os filtros agora vivem em
+`app.modules.messaging_templates.application.dtos.filters`. Re-export para imports
+antigos."""
 
+from app.modules.messaging_templates.application.dtos.filters import (
+    MessagingTemplateFilters,
+)
 
-@dataclass
-class MessagingTemplateFilters:
-    establishment_id: uuid.UUID | None = None
-    is_active: bool | None = None
-    service_id: uuid.UUID | None = None
-    q: str | None = None
+__all__ = ["MessagingTemplateFilters"]

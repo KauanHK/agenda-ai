@@ -1,27 +1,15 @@
-from typing import Annotated
+"""Compat: as dependências HTTP agora vivem em
+`app.modules.scheduling_notifications.adapters.http.dependencies`. Re-export para
+imports antigos."""
 
-from fastapi import Depends
-
-from app.api.deps import UnitOfWorkDep
-from app.modules.scheduling_notifications.application.cancel import (
-    SchedulingNotificationsCanceller,
-)
-from app.modules.scheduling_notifications.application.read import (
-    SchedulingNotificationsReader,
+from app.modules.scheduling_notifications.adapters.http.dependencies import (
+    PaginationFiltersDep,
+    SchedulingNotificationsUnitOfWorkDep,
+    get_pagination_filters,
 )
 
-
-def get_scheduling_notifications_reader(uow: UnitOfWorkDep) -> SchedulingNotificationsReader:
-    return SchedulingNotificationsReader(uow=uow)
-
-
-def get_scheduling_notifications_canceller(uow: UnitOfWorkDep) -> SchedulingNotificationsCanceller:
-    return SchedulingNotificationsCanceller(uow=uow)
-
-
-SchedulingNotificationsReaderDep = Annotated[
-    SchedulingNotificationsReader, Depends(get_scheduling_notifications_reader)
-]
-SchedulingNotificationsCancellerDep = Annotated[
-    SchedulingNotificationsCanceller, Depends(get_scheduling_notifications_canceller)
+__all__ = [
+    "PaginationFiltersDep",
+    "SchedulingNotificationsUnitOfWorkDep",
+    "get_pagination_filters",
 ]
