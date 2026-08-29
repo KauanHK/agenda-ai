@@ -81,4 +81,13 @@ class Client(Base):
             "establishment_id",
             "phone",
         ),
+        # Índice funcional sobre os dígitos do telefone. A identificação do cliente no
+        # canal automático compara o número sem formatação, porque a coluna guarda o
+        # que foi digitado no painel. Ver `app.core.phone` e
+        # `ClientsRepository.get_by_establishment_and_phone`.
+        Index(
+            "idx_clients_establishment_phone_digits",
+            "establishment_id",
+            text(r"regexp_replace(phone, '\D', '', 'g')"),
+        ),
     )

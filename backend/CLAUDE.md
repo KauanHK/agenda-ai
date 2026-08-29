@@ -29,8 +29,8 @@ uv run ruff check ./app/modules/users/ --fix
 uv run celery -A app.celery_app worker --loglevel=info
 uv run celery -A app.celery_app beat --loglevel=info
 
-# Docker (full stack)
-docker-compose up
+# Docker (stack completa local: db, redis, api, worker, beat, frontend em http://localhost:8080)
+docker compose -f docker-compose.local.yml up --build
 ```
 
 ## Architecture

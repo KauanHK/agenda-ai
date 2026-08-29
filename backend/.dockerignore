@@ -1,0 +1,26 @@
+# Ambientes e segredos
+.venv/
+.env
+.env.*
+!.env.example
+
+# Caches
+__pycache__/
+*.py[oc]
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Ferramentas / editor
+.git/
+.gitignore
+.vscode/
+.claude/
+.pylintrc
+
+# Coisas que não entram na imagem
+tests/
+docs/
+tmp.py
+README.md

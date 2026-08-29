@@ -108,6 +108,44 @@ class SchedulingsRepository:
         await self._session.refresh(merged)
         return merged
 
+    async def list_overlapping(
+        self,
+        establishment_id: uuid.UUID,
+        starts_at: datetime,
+        ends_at: datetime,
+        exclude_id: uuid.UUID | None = None,
+    ) -> list[Scheduling]:
+        """
+        Lista os agendamentos ativos de um estabelecimento que ocupam qualquer parte da
+        janela informada.
+
+        Serve ao cálculo de disponibilidade: em vez de uma consulta por
+        (horário candidato x profissional), carrega a agenda da janela inteira de uma
+        vez e a sobreposição é resolvida em memória.
+
+        Args:
+            establishment_id (uuid.UUID): O estabelecimento.
+            starts_at (datetime): Início da janela.
+            ends_at (datetime): Fim da janela.
+            exclude_id (uuid.UUID | None):
+                Agendamento a ignorar — usado no reagendamento, para que ele não
+                conflite consigo mesmo.
+
+        Returns:
+            list[Scheduling]: Os agendamentos que sobrepõem a janela.
+        """
+
+        query = select(Scheduling).where(
+            Scheduling.establishment_id == establishment_id,
+            Scheduling.status != SchedulingStatus.CANCELLED,
+            Scheduling.starts_at < ends_at,
+            Scheduling.ends_at > starts_at,
+        )
+        if exclude_id is not None:
+            query = query.where(Scheduling.id != exclude_id)
+        result = await self._session.execute(query)
+        return list(result.scalars())
+
     async def list(
         self,
         pagination: PaginationParams,

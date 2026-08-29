@@ -6,6 +6,7 @@ from app.modules.operating_hours.domain.model import OperatingHour
 from app.modules.scheduling_notifications.domain.model import SchedulingNotification
 from app.modules.schedulings.domain.model import Scheduling, SchedulingStatusLog
 from app.modules.services.domain.model import Service
+from app.modules.unavailabilities.domain.model import Unavailability
 from app.modules.users.domain.model import User
 
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     "SchedulingNotification",
     "SchedulingStatusLog",
     "Service",
+    "Unavailability",
     "User",
 ]

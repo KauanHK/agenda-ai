@@ -1,0 +1,14 @@
+node_modules/
+dist/
+dist-ssr/
+.env
+.env.*
+!.env.example
+*.local
+*.tsbuildinfo
+.git/
+.gitignore
+.vscode/
+.claude/
+.idea/
+npm-debug.log*
