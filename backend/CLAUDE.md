@@ -31,6 +31,9 @@ uv run celery -A app.celery_app beat --loglevel=info
 
 # Docker (stack completa local: db, redis, api, worker, beat, frontend em http://localhost:8080)
 docker compose -f docker-compose.local.yml up --build
+
+# Bootstrap do primeiro admin global (rodar manualmente no servidor)
+docker compose exec api uv run --no-sync python -m scripts.create_admin
 ```
 
 ## Architecture
