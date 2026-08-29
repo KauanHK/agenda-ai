@@ -2,33 +2,25 @@ import uuid
 from typing import Annotated
 
 from fastapi import Depends
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.api.deps.db import UnitOfWorkDep
 from app.core.actors.user import Membership, UserActor
 from app.core.exceptions import ForbiddenError, UnauthorizedError
-from app.core.security.access_tokens import decode_access_token
-from app.modules.memberships.infra.repository import MembershipRepository
-from app.modules.users.infra.repository import UsersRepository
+from app.core.security.dependencies import SubjectDep
+from app.modules.auth.adapters.http.dependencies import AuthUnitOfWorkDep
 
 
 async def get_current_actor(
-    uow: UnitOfWorkDep,
-    authorization: HTTPAuthorizationCredentials = Depends(HTTPBearer()),
+    user_id: SubjectDep,
+    uow: AuthUnitOfWorkDep,
 ) -> UserActor:
 
-    claims = decode_access_token(authorization.credentials)
-    user_id = uuid.UUID(claims["sub"])
-
     async with uow:
-        users_repo = uow.repository(UsersRepository)
-        user = await users_repo.get_by_id_or_none(user_id)
+        user = await uow.users.get_by_id_or_none(user_id)
 
         if user is None or not user.is_active:
             raise UnauthorizedError("Usuário inativo ou não encontrado.")
 
-        memberships_repo = uow.repository(MembershipRepository)
-        memberships = await memberships_repo.list_by_user(user_id)
+        memberships = await uow.memberships.list_by_user(user.id)
 
     return UserActor(
         user_id=user.id,
