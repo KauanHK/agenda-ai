@@ -55,19 +55,31 @@ class AgendaBotSessionIssuer:
             except httpx.HTTPError as exc:
                 raise BookingSessionError("Falha de transporte ao emitir a sessão.") from exc
 
-            status = response.status_code
-            if status == httpx.codes.CREATED:
-                return self._to_session(response, issued_for=phone)
-            if status == httpx.codes.FORBIDDEN:
-                raise ClientBlockedError(f"Cliente inativo no estabelecimento (HTTP {status}).")
-            if status >= httpx.codes.INTERNAL_SERVER_ERROR:
-                last_cause = BookingSessionError(f"AgendaBot indisponível (HTTP {status}).")
-                continue
-            raise BookingSessionError(f"Emissão de sessão recusada (HTTP {status}).")
+            outcome = self._interpret_response(response, issued_for=phone)
+            if isinstance(outcome, BookingSession):
+                return outcome
+            last_cause = outcome
 
         raise BookingSessionError(
             "Emissão de sessão falhou após esgotar as tentativas."
         ) from last_cause
+
+    def _interpret_response(
+        self, response: httpx.Response, *, issued_for: str
+    ) -> BookingSession | BookingSessionError:
+        """Traduz o status HTTP na sessão emitida, num erro terminal ou num erro repetível.
+
+        Retorna a `BookingSession` no `201` ou um `BookingSessionError` quando o
+        status é `5xx` (repetível). Um `4xx` sempre levanta exceção aqui.
+        """
+        status = response.status_code
+        if status == httpx.codes.CREATED:
+            return self._to_session(response, issued_for=issued_for)
+        if status == httpx.codes.FORBIDDEN:
+            raise ClientBlockedError(f"Cliente inativo no estabelecimento (HTTP {status}).")
+        if status >= httpx.codes.INTERNAL_SERVER_ERROR:
+            return BookingSessionError(f"AgendaBot indisponível (HTTP {status}).")
+        raise BookingSessionError(f"Emissão de sessão recusada (HTTP {status}).")
 
     def _to_session(self, response: httpx.Response, *, issued_for: str) -> BookingSession:
         """Converte o corpo `201` na entidade de sessão, calculando a expiração."""
