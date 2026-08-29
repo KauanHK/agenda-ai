@@ -11,6 +11,7 @@ _EXPIRES_AT = datetime(2026, 8, 29, 12, 0, 0, tzinfo=UTC)
 def _session() -> BookingSession:
     return BookingSession(
         token="jwt",
+        phone="5547999123456",
         client_id=uuid.UUID("01a04f64-0000-7000-8000-000000000000"),
         client_name="Kauan",
         expires_at=_EXPIRES_AT,

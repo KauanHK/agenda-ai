@@ -68,6 +68,7 @@ class BookingSessionProvider:
         issuer: BookingSessionIssuerProtocol,
         cache: SessionTokenCacheProtocol,
         clock: Callable[[], datetime],
+        refresh_margin_seconds: int,          # SESSION_REFRESH_MARGIN_SECONDS
     ) -> None: ...
 
     async def for_contact(self, contact: Contact) -> BookingSession:

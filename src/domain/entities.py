@@ -50,6 +50,8 @@ class BookingSession:
     """A sessão autenticada do cliente no AgendaBot."""
 
     token: str
+    phone: str
+    """Telefone canônico (E.164 sem `+`) que originou a sessão; é a chave do cache."""
     client_id: uuid.UUID
     client_name: str
     expires_at: datetime
