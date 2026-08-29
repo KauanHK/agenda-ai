@@ -104,7 +104,7 @@ services:
     ports:
       - "8745:8000"
     command: >
-      uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000
+      uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000 --root-path /api
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')\""]
       interval: 15s
