@@ -65,6 +65,17 @@ jobs:
     needs: build
 
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Copia arquivos de infra para a VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "docker-compose.yml,nginx.conf"
+          target: /opt/agenda-bot
+
       - uses: appleboy/ssh-action@v1
         env:
           IMAGE_FRONTEND: ${{ needs.build.outputs.image_frontend }}

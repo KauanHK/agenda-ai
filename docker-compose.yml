@@ -18,7 +18,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 x-backend: &backend
-  image: ghcr.io/${GITHUB_REPOSITORY}-backend:latest
+  image: ${IMAGE_BACKEND:-ghcr.io/kauanhk/agenda-ai-backend}:latest
   build:
     context: ./backend
     dockerfile: Dockerfile
@@ -58,7 +58,7 @@ services:
 
   frontend:
     container_name: agenda-bot-front
-    image: ghcr.io/${GITHUB_REPOSITORY}-front:latest
+    image: ${IMAGE_FRONTEND:-ghcr.io/kauanhk/agenda-ai-front}:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
