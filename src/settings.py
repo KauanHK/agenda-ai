@@ -2,58 +2,108 @@
 
 Este é o único módulo do projeto que lê variáveis de ambiente. Todo o resto recebe
 os valores já prontos, por injeção.
+
+A configuração é dividida em grupos aninhados (`agendabot`, `telegram`, `llm`, ...).
+No ambiente, cada grupo é um prefixo separado por `__`: a chave do serviço do
+AgendaBot é `AGENDABOT__SERVICE_KEY`, o token do bot é `TELEGRAM__BOT_TOKEN`, e assim
+por diante.
 """
 
 from typing import Literal, Self
 from uuid import UUID
 
-from pydantic import SecretStr, model_validator
+from pydantic import BaseModel, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):
-    """Configuração do agente, carregada do ambiente (ou de um arquivo `.env`)."""
+class AgendaBotSettings(BaseModel):
+    """Acesso à API e ao MCP do AgendaBot. Prefixo `AGENDABOT__`."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-
-    # AgendaBot
-    agendabot_api_url: str
-    agendabot_mcp_url: str
-    agendabot_service_key: SecretStr
+    api_url: str
+    mcp_url: str
+    service_key: SecretStr
     establishment_id: UUID
     establishment_timezone: str = "America/Sao_Paulo"
 
-    # Telegram
-    telegram_bot_token: SecretStr
-    telegram_webhook_secret: SecretStr
 
-    # LLM
-    llm_provider: Literal["anthropic", "openai"] = "anthropic"
-    llm_model: str = "claude-sonnet-5"
-    llm_temperature: float = 0.3
-    llm_max_tokens: int = 1024
+class TelegramSettings(BaseModel):
+    """Credenciais do canal Telegram. Prefixo `TELEGRAM__`."""
+
+    bot_token: SecretStr
+    webhook_secret: SecretStr
+
+
+class LLMSettings(BaseModel):
+    """Provider e parâmetros do modelo de linguagem. Prefixo `LLM__`."""
+
+    provider: Literal["anthropic", "openai"] = "anthropic"
+    model: str = "claude-sonnet-5"
+    temperature: float = 0.3
+    max_tokens: int = 1024
     anthropic_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
 
-    # Redis
-    redis_url: str
+    @property
+    def selected_api_key(self) -> SecretStr | None:
+        """A API key do provider atualmente selecionado."""
+        return {
+            "anthropic": self.anthropic_api_key,
+            "openai": self.openai_api_key,
+        }[self.provider]
 
-    # Conversa e limites do agente
-    conversation_ttl_minutes: int = 1440
+
+class RedisSettings(BaseModel):
+    """Redis usado pelo checkpointer e pelo cache. Prefixo `REDIS__`."""
+
+    url: str
+
+
+class ConversationSettings(BaseModel):
+    """Limites da conversa e do ciclo do agente. Prefixo `CONVERSATION__`."""
+
+    ttl_minutes: int = 1440
     max_history_messages: int = 10
     max_agent_steps: int = 8
     max_input_chars: int = 1000
     session_refresh_margin_seconds: int = 60
 
-    # Identidade (fase 1)
+
+class IdentitySettings(BaseModel):
+    """Identidade sintética da fase 1. Prefixo `IDENTITY__`."""
+
     synthetic_phone_prefix: str = "5547999"
 
-    # HTTP / MCP
-    http_timeout_seconds: float = 10.0
+
+class HTTPSettings(BaseModel):
+    """Timeouts de HTTP e MCP. Prefixo `HTTP__`."""
+
+    timeout_seconds: float = 10.0
     mcp_timeout_seconds: float = 15.0
 
-    # Observabilidade
+
+class ObservabilitySettings(BaseModel):
+    """Observabilidade. Prefixo `OBSERVABILITY__`."""
+
     log_level: str = "INFO"
+
+
+class Settings(BaseSettings):
+    """Configuração do agente, carregada do ambiente (ou de um arquivo `.env`)."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_nested_delimiter="__",
+        extra="ignore",
+    )
+
+    agendabot: AgendaBotSettings
+    telegram: TelegramSettings
+    redis: RedisSettings
+    llm: LLMSettings = LLMSettings()
+    conversation: ConversationSettings = ConversationSettings()
+    identity: IdentitySettings = IdentitySettings()
+    http: HTTPSettings = HTTPSettings()
+    observability: ObservabilitySettings = ObservabilitySettings()
 
     @model_validator(mode="after")
     def _require_selected_provider_key(self) -> Self:
@@ -61,13 +111,9 @@ class Settings(BaseSettings):
 
         Falhar aqui é melhor que falhar no primeiro cliente.
         """
-        provider_keys: dict[str, SecretStr | None] = {
-            "anthropic": self.anthropic_api_key,
-            "openai": self.openai_api_key,
-        }
-        if provider_keys[self.llm_provider] is None:
+        if self.llm.selected_api_key is None:
             raise ValueError(
-                f"LLM_PROVIDER={self.llm_provider!r} exige a variável "
-                f"{self.llm_provider.upper()}_API_KEY."
+                f"LLM__PROVIDER={self.llm.provider!r} exige a variável "
+                f"LLM__{self.llm.provider.upper()}_API_KEY."
             )
         return self

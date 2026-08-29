@@ -3,39 +3,50 @@
 ## 9.1 Settings
 
 `src/settings.py`, um único `BaseSettings`. Ninguém mais no projeto lê `os.environ`.
+A config é dividida em grupos aninhados; no ambiente cada grupo é um prefixo separado
+por `__` (`env_nested_delimiter="__"`).
 
 ```python
 class Settings(BaseSettings):
-    """Configuração do agente, carregada do ambiente."""
+    model_config = SettingsConfigDict(
+        env_file=".env", env_nested_delimiter="__", extra="ignore",
+    )
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    agendabot: AgendaBotSettings
+    telegram: TelegramSettings
+    redis: RedisSettings
+    llm: LLMSettings = LLMSettings()
+    conversation: ConversationSettings = ConversationSettings()
+    identity: IdentitySettings = IdentitySettings()
+    http: HTTPSettings = HTTPSettings()
+    observability: ObservabilitySettings = ObservabilitySettings()
 ```
 
 | Variável | Tipo | Default | Uso |
 | --- | --- | --- | --- |
-| `AGENDABOT_API_URL` | str | `https://agenda.escaleia.cloud` | base da API |
-| `AGENDABOT_MCP_URL` | str | `https://agenda.escaleia.cloud/mcp` | endpoint MCP |
-| `AGENDABOT_SERVICE_KEY` | `SecretStr` | — | header `X-Service-Key` |
-| `ESTABLISHMENT_ID` | `UUID` | `01a04f5b-0e84-7530-be67-63f08e7b2269` | fixo nesta fase |
-| `ESTABLISHMENT_TIMEZONE` | str | `America/Sao_Paulo` | data/hora do prompt |
-| `TELEGRAM_BOT_TOKEN` | `SecretStr` | — | Bot API |
-| `TELEGRAM_WEBHOOK_SECRET` | `SecretStr` | — | path secreto do webhook |
-| `LLM_PROVIDER` | `Literal["anthropic","openai"]` | `anthropic` | provider |
-| `LLM_MODEL` | str | `claude-sonnet-5` | modelo |
-| `LLM_TEMPERATURE` | float | `0.3` | criatividade baixa: é atendimento |
-| `LLM_MAX_TOKENS` | int | `1024` | resposta de chat é curta |
-| `ANTHROPIC_API_KEY` | `SecretStr \| None` | `None` | exigida se provider = anthropic |
-| `OPENAI_API_KEY` | `SecretStr \| None` | `None` | exigida se provider = openai |
-| `REDIS_URL` | str | `redis://localhost:6379/1` | checkpointer + cache |
-| `CONVERSATION_TTL_MINUTES` | int | `1440` | TTL do histórico |
-| `MAX_HISTORY_MESSAGES` | int | `40` | poda do histórico |
-| `MAX_AGENT_STEPS` | int | `8` | teto de ciclos do grafo |
-| `MAX_INPUT_CHARS` | int | `1000` | truncamento da mensagem do cliente |
-| `SESSION_REFRESH_MARGIN_SECONDS` | int | `60` | margem antes de expirar |
-| `SYNTHETIC_PHONE_PREFIX` | str | `5547999` | identidade da fase 1 |
-| `HTTP_TIMEOUT_SECONDS` | float | `10.0` | API do AgendaBot e Telegram |
-| `MCP_TIMEOUT_SECONDS` | float | `15.0` | carregamento e execução de tools |
-| `LOG_LEVEL` | str | `INFO` | logging |
+| `AGENDABOT__API_URL` | str | — | base da API |
+| `AGENDABOT__MCP_URL` | str | — | endpoint MCP |
+| `AGENDABOT__SERVICE_KEY` | `SecretStr` | — | header `X-Service-Key` |
+| `AGENDABOT__ESTABLISHMENT_ID` | `UUID` | — | fixo nesta fase |
+| `AGENDABOT__ESTABLISHMENT_TIMEZONE` | str | `America/Sao_Paulo` | data/hora do prompt |
+| `TELEGRAM__BOT_TOKEN` | `SecretStr` | — | Bot API |
+| `TELEGRAM__WEBHOOK_SECRET` | `SecretStr` | — | path secreto do webhook |
+| `REDIS__URL` | str | — | checkpointer + cache |
+| `LLM__PROVIDER` | `Literal["anthropic","openai"]` | `anthropic` | provider |
+| `LLM__MODEL` | str | `claude-sonnet-5` | modelo |
+| `LLM__TEMPERATURE` | float | `0.3` | criatividade baixa: é atendimento |
+| `LLM__MAX_TOKENS` | int | `1024` | resposta de chat é curta |
+| `LLM__ANTHROPIC_API_KEY` | `SecretStr \| None` | `None` | exigida se provider = anthropic |
+| `LLM__OPENAI_API_KEY` | `SecretStr \| None` | `None` | exigida se provider = openai |
+| `CONVERSATION__TTL_MINUTES` | int | `1440` | TTL do histórico |
+| `CONVERSATION__MAX_HISTORY_MESSAGES` | int | `10` | poda do histórico |
+| `CONVERSATION__MAX_AGENT_STEPS` | int | `8` | teto de ciclos do grafo |
+| `CONVERSATION__MAX_INPUT_CHARS` | int | `1000` | truncamento da mensagem do cliente |
+| `CONVERSATION__SESSION_REFRESH_MARGIN_SECONDS` | int | `60` | margem antes de expirar |
+| `IDENTITY__SYNTHETIC_PHONE_PREFIX` | str | `5547999` | identidade da fase 1 |
+| `HTTP__TIMEOUT_SECONDS` | float | `10.0` | API do AgendaBot e Telegram |
+| `HTTP__MCP_TIMEOUT_SECONDS` | float | `15.0` | carregamento e execução de tools |
+| `OBSERVABILITY__LOG_LEVEL` | str | `INFO` | logging |
 
 Um `model_validator` garante que a API key do provider selecionado existe — falhar no
 boot é melhor que falhar no primeiro cliente.
