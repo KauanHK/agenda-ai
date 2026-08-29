@@ -1,10 +1,17 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# PRODUÇÃO — VPS + EasyPanel
+# PRODUÇÃO — VPS + nginx no servidor
 #
 # As imagens são buildadas e publicadas no GHCR pelo workflow
 # .github/workflows/deploy.yml. Na VPS o deploy só faz `docker compose up -d`
-# com as imagens já baixadas. O reverse proxy do EasyPanel (rede externa
-# "easypanel") termina o HTTPS e roteia para o container `nginx`.
+# com as imagens já baixadas.
+#
+# Não há portas publicadas. O container `nginx` deste stack é o único ponto de
+# entrada e fica acessível na rede Docker externa `web` como `agenda-bot:80`.
+# O nginx do servidor (reverse proxy + HTTPS) precisa estar conectado à mesma
+# rede `web` para rotear para ele:
+#
+#   docker network create web        # uma vez, antes do primeiro up
+#   docker network connect web <container-nginx-do-servidor>
 #
 # Requer na VPS: /opt/agenda-bot/backend/.env  (ver backend/.env.example)
 # Para subir/testar localmente use docker-compose.local.yml.
@@ -46,7 +53,7 @@ services:
     expose:
       - "80"
     networks:
-      - easypanel
+      - web
       - backend
 
   frontend:
@@ -145,9 +152,9 @@ networks:
   backend:
     internal: true
   egress:
-  easypanel:
+  web:
     external: true
-    name: easypanel
+    name: web
 
 volumes:
   pgdata:
