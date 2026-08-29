@@ -43,19 +43,16 @@ class AgendaBotSessionIssuer:
         if name:
             payload["name"] = name
 
+        return await self._issue_with_retry(payload, issued_for=phone)
+
+    async def _issue_with_retry(
+        self, payload: dict[str, str], *, issued_for: str
+    ) -> BookingSession:
+        """Repete `_attempt` com backoff exponencial até obter a sessão ou esgotar."""
         last_cause: Exception | None = None
         for attempt in range(self._max_attempts):
-            if attempt:
-                await asyncio.sleep(self._backoff_base_seconds * 2 ** (attempt - 1))
-            try:
-                response = await self._client.post(self._path, json=payload)
-            except httpx.ConnectError as exc:
-                last_cause = exc
-                continue
-            except httpx.HTTPError as exc:
-                raise BookingSessionError("Falha de transporte ao emitir a sessão.") from exc
-
-            outcome = self._interpret_response(response, issued_for=phone)
+            await self._backoff(attempt)
+            outcome = await self._attempt(payload, issued_for=issued_for)
             if isinstance(outcome, BookingSession):
                 return outcome
             last_cause = outcome
@@ -63,6 +60,27 @@ class AgendaBotSessionIssuer:
         raise BookingSessionError(
             "Emissão de sessão falhou após esgotar as tentativas."
         ) from last_cause
+
+    async def _backoff(self, attempt: int) -> None:
+        """Espera o backoff exponencial antes da tentativa (nada antes da primeira)."""
+        if attempt:
+            await asyncio.sleep(self._backoff_base_seconds * 2 ** (attempt - 1))
+
+    async def _attempt(
+        self, payload: dict[str, str], *, issued_for: str
+    ) -> BookingSession | Exception:
+        """Executa uma tentativa: retorna a sessão ou o erro repetível a guardar.
+
+        Erros de transporte não repetíveis são levantados como `BookingSessionError`.
+        """
+        try:
+            response = await self._client.post(self._path, json=payload)
+        except httpx.ConnectError as exc:
+            return exc
+        except httpx.HTTPError as exc:
+            raise BookingSessionError("Falha de transporte ao emitir a sessão.") from exc
+
+        return self._interpret_response(response, issued_for=issued_for)
 
     def _interpret_response(
         self, response: httpx.Response, *, issued_for: str
