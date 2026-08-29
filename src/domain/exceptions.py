@@ -5,8 +5,6 @@ algo dá errado. Isso mantém a decisão "o que o cliente lê" no domínio, e n�
 espalhada por `try/except` nos adapters.
 """
 
-from __future__ import annotations
-
 
 class AgentError(Exception):
     """Base de todo erro esperado do agente."""

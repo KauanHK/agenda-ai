@@ -4,8 +4,6 @@ Camada pura: só `dataclasses`, `enum`, `datetime`, `uuid`. Nenhum I/O, nenhuma
 dependência externa. Tudo imutável (`frozen=True`).
 """
 
-from __future__ import annotations
-
 import uuid
 from dataclasses import dataclass
 from datetime import datetime

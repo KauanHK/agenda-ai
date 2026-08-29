@@ -4,15 +4,11 @@ Este é o único módulo do projeto que lê variáveis de ambiente. Todo o resto
 os valores já prontos, por injeção.
 """
 
-from __future__ import annotations
-
 from typing import Literal, Self
 from uuid import UUID
 
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-_DEFAULT_ESTABLISHMENT_ID = UUID("01a04f5b-0e84-7530-be67-63f08e7b2269")
 
 
 class Settings(BaseSettings):
@@ -21,10 +17,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # AgendaBot
-    agendabot_api_url: str = "https://agenda.escaleia.cloud"
-    agendabot_mcp_url: str = "https://agenda.escaleia.cloud/mcp"
+    agendabot_api_url: str
+    agendabot_mcp_url: str
     agendabot_service_key: SecretStr
-    establishment_id: UUID = _DEFAULT_ESTABLISHMENT_ID
+    establishment_id: UUID
     establishment_timezone: str = "America/Sao_Paulo"
 
     # Telegram
@@ -40,11 +36,11 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
 
     # Redis
-    redis_url: str = "redis://localhost:6379/1"
+    redis_url: str
 
     # Conversa e limites do agente
     conversation_ttl_minutes: int = 1440
-    max_history_messages: int = 40
+    max_history_messages: int = 10
     max_agent_steps: int = 8
     max_input_chars: int = 1000
     session_refresh_margin_seconds: int = 60
