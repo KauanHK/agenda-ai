@@ -57,7 +57,7 @@ boot é melhor que falhar no primeiro cliente.
 ```toml
 [project]
 name = "agente-agenda"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
@@ -80,7 +80,7 @@ dev = ["pytest>=8", "pytest-asyncio>=0.24", "respx>=0.21", "fakeredis>=2.26",
        "ruff>=0.8", "mypy>=1.13"]
 ```
 
-Gerenciador: `uv`, como no `agenda2`. Python 3.12+.
+Gerenciador: `uv`, como no `agenda2`. Python 3.14+ (o `.python-version` fixa `3.14`).
 
 ## 9.3 Composition root
 
@@ -131,7 +131,11 @@ desfaz.
 
 ## 9.5 Deploy
 
-- `Dockerfile` multi-stage com `uv`, imagem `python:3.12-slim`, usuário não-root.
+- `Dockerfile` multi-stage com `uv`, sobre `ghcr.io/astral-sh/uv:python3.14-bookworm-slim`,
+  venv resolvido do `uv.lock` (`uv sync --locked --no-dev --extra anthropic`), runtime
+  não-root (`appuser`, uid 1000), `EXPOSE 8080`. Um `.dockerignore` mantém `scripts/`
+  na imagem (o `set_webhook` roda no container durante o deploy) e exclui `docs/`,
+  `tests/`, caches e `.env`.
 - Um serviço no `docker-compose.yml` + Redis, atrás do mesmo nginx do `agenda2`.
 - Healthcheck: `GET /health`.
 - Escala horizontal é segura: o estado todo está no Redis e cada update é
