@@ -1,0 +1,23 @@
+# Carregado automático pelo `docker compose` em desenvolvimento.
+# Constrói a imagem local, publica as portas e troca a rede `web` externa
+# por uma rede local (não é preciso `docker network create web`).
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agente-agenda:dev
+
+  nginx:
+    ports:
+      - "8080:80"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+networks:
+  web:
+    external: false
+    name: agente-agenda_web

@@ -1,0 +1,72 @@
+# Stack de produção: só imagens publicadas, sem `build`.
+# O `docker-compose.override.yml` (carregado automático em dev) acrescenta
+# `build`, portas e uma rede `web` local.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: agente-agenda-nginx
+    restart: unless-stopped
+    depends_on:
+      - api
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - web
+      - backend
+    logging: *logging
+
+  api:
+    image: ghcr.io/${GITHUB_REPOSITORY:-kauanhk/agenda-ai-agent}:latest
+    container_name: agente-agenda-api
+    restart: unless-stopped
+    env_file: ./.env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - backend
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import socket; socket.create_connection(('127.0.0.1', 8080), timeout=3).close()"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    container_name: agente-agenda-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    stop_grace_period: 30s
+    logging: *logging
+
+networks:
+  backend:
+    internal: true
+  web:
+    external: true
+    name: web
+
+volumes:
+  redisdata:

@@ -129,15 +129,33 @@ curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
 Um script `scripts/set_webhook.py` faz isso lendo o `.env`, e `scripts/delete_webhook.py`
 desfaz.
 
+Como alternativa, a stack inteira (nginx + api + redis) sobe pelo compose, que em
+desenvolvimento constrói a imagem local e publica a porta `8080` no nginx:
+
+```bash
+cp .env.example .env      # preencher as chaves; REDIS__URL=redis://redis:6379/1
+docker compose up --build
+```
+
 ## 9.5 Deploy
 
 - `Dockerfile` multi-stage com `uv`, sobre `ghcr.io/astral-sh/uv:python3.14-bookworm-slim`,
   venv resolvido do `uv.lock` (`uv sync --locked --no-dev --extra anthropic`), runtime
   não-root (`appuser`, uid 1000), `EXPOSE 8080`. Um `.dockerignore` mantém `scripts/`
   na imagem (o `set_webhook` roda no container durante o deploy) e exclui `docs/`,
-  `tests/`, caches e `.env`.
-- Um serviço no `docker-compose.yml` + Redis, atrás do mesmo nginx do `agenda2`.
-- Healthcheck: `GET /health`.
+  `tests/`, caches, `.env`, os `docker-compose*.yml` e `nginx/`.
+- Dois composes: `docker-compose.yml` (produção — só a imagem do GHCR
+  `ghcr.io/${GITHUB_REPOSITORY}:latest`, sem `build`) e `docker-compose.override.yml`
+  (carregado automático em dev — acrescenta `build`, as portas e uma rede `web` local).
+- Serviços do `docker-compose.yml`: `nginx` (`nginx:1.27-alpine`, `nginx/nginx.conf`
+  versionado, encaminha para `api:8080`), `api` e `redis` (`redis:7-alpine`,
+  `--appendonly yes`, volume `redisdata`). O `nginx` fica em duas redes: a `web`
+  (externa, `docker network create web`, onde o proxy de borda da VPS o alcança e
+  termina o TLS) e a `backend` (`internal: true`, só api + redis). **Não** reaproveita
+  o nginx do `agenda2`.
+- Healthcheck do container `api`: TCP na porta `8080` (`python -c "import socket;
+  ..."`), sem tocar no Redis. `GET /health` é o *liveness* (200 sempre) e
+  `GET /health/ready` faz `PING` no Redis, para o proxy/monitoração.
 - Escala horizontal é segura: o estado todo está no Redis e cada update é
   independente. A exceção é a ordem de mensagens de um mesmo chat, que não é garantida
   entre réplicas — aceitável nesta fase (mensagens em rajada são raras em agendamento).
