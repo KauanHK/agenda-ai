@@ -1,0 +1,148 @@
+"""Composition root: monta as dependências concretas da aplicação.
+
+Só este módulo (e `main.py`) conhece as classes concretas de infraestrutura;
+ninguém mais instancia adapter. O `AsyncExitStack` devolvido guarda tudo que
+precisa ser fechado no shutdown (clientes HTTP, Redis, saver).
+
+Ordem de construção: Redis → checkpointer → clientes HTTP → sessão → grafo →
+adapters do Telegram → casos de uso → roteador do webhook.
+"""
+
+import functools
+import logging
+from collections.abc import Callable, Coroutine, Mapping
+from contextlib import AsyncExitStack
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
+from zoneinfo import ZoneInfo
+
+from src.application.use_cases.handle_incoming_message import HandleIncomingMessage
+from src.application.use_cases.open_booking_session import BookingSessionProvider
+from src.application.use_cases.reset_conversation import ResetConversation
+from src.infrastructure.agendabot.http_client import build_agendabot_client
+from src.infrastructure.agendabot.session_issuer import AgendaBotSessionIssuer
+from src.infrastructure.agendabot.tool_provider import AgendaBotToolProvider
+from src.infrastructure.agent.graph import build_graph
+from src.infrastructure.agent.runner import LangGraphAgentRunner
+from src.infrastructure.identity.synthetic_phone import SyntheticPhoneResolver
+from src.infrastructure.llm.factory import build_chat_model
+from src.infrastructure.redis.checkpointer import open_conversation_checkpointer
+from src.infrastructure.redis.client import build_redis_client
+from src.infrastructure.redis.conversation_history import CheckpointerConversationHistory
+from src.infrastructure.redis.session_cache import RedisSessionTokenCache
+from src.infrastructure.telegram.client import TelegramMessenger, build_telegram_client
+from src.infrastructure.telegram.update_parser import parse_update
+from src.infrastructure.telegram.webhook_handler import TelegramWebhookHandler
+from src.settings import Settings
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class Container:
+    """As dependências prontas que a interface HTTP consome."""
+
+    handle_update: Callable[[Mapping[str, Any]], Coroutine[Any, Any, None]]
+    webhook_secret: str
+
+
+async def build_container(settings: Settings) -> tuple[Container, AsyncExitStack]:
+    """Constrói as dependências e devolve o stack que as fecha no shutdown."""
+    stack = AsyncExitStack()
+    try:
+        container = await _wire(settings=settings, stack=stack)
+    except BaseException:
+        await stack.aclose()
+        raise
+    return container, stack
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
+    """Instancia e liga tudo, registrando no `stack` o que precisa ser fechado."""
+    establishment_tz = ZoneInfo(settings.agendabot.establishment_timezone)
+
+    checkpointer = await stack.enter_async_context(
+        open_conversation_checkpointer(
+            settings.redis.url,
+            ttl_minutes=settings.conversation.ttl_minutes,
+        )
+    )
+    redis_client = build_redis_client(settings.redis.url)
+    stack.push_async_callback(redis_client.aclose)
+
+    agendabot_client = await stack.enter_async_context(
+        build_agendabot_client(
+            base_url=settings.agendabot.api_url,
+            service_key=settings.agendabot.service_key.get_secret_value(),
+            timeout_seconds=settings.http.timeout_seconds,
+        )
+    )
+    telegram_client = await stack.enter_async_context(
+        build_telegram_client(
+            api_root=settings.telegram.api_root,
+            bot_token=settings.telegram.bot_token.get_secret_value(),
+            timeout_seconds=settings.http.timeout_seconds,
+        )
+    )
+
+    phone_resolver = SyntheticPhoneResolver(settings.identity.synthetic_phone_prefix)
+    session_provider = BookingSessionProvider(
+        phone_resolver=phone_resolver,
+        issuer=AgendaBotSessionIssuer(
+            agendabot_client,
+            establishment_id=settings.agendabot.establishment_id,
+            clock=_utc_now,
+        ),
+        cache=RedisSessionTokenCache(
+            redis_client,
+            clock=_utc_now,
+            refresh_margin_seconds=settings.conversation.session_refresh_margin_seconds,
+        ),
+        clock=_utc_now,
+        refresh_margin_seconds=settings.conversation.session_refresh_margin_seconds,
+    )
+    tool_provider = AgendaBotToolProvider(
+        mcp_url=settings.agendabot.mcp_url,
+        timeout_seconds=settings.http.mcp_timeout_seconds,
+    )
+
+    runner = LangGraphAgentRunner(
+        build_graph(
+            build_chat_model(settings.llm),
+            checkpointer=checkpointer,
+            history_limit=settings.conversation.max_history_messages,
+        ),
+        max_agent_steps=settings.conversation.max_agent_steps,
+    )
+
+    messenger = TelegramMessenger(telegram_client)
+    handle_incoming_message = HandleIncomingMessage(
+        session_provider,
+        tool_provider,
+        runner,
+        messenger,
+        clock=lambda: datetime.now(establishment_tz),
+    )
+    reset_conversation = ResetConversation(CheckpointerConversationHistory(checkpointer))
+
+    webhook_handler = TelegramWebhookHandler(
+        parse_update=functools.partial(
+            parse_update,
+            phone_resolver=phone_resolver,
+            max_chars=settings.conversation.max_input_chars,
+        ),
+        handle_incoming_message=handle_incoming_message,
+        reset_conversation=reset_conversation,
+        messenger=messenger,
+    )
+    logger.info("Dependências montadas (estabelecimento %s)", settings.agendabot.establishment_id)
+
+    return Container(
+        handle_update=webhook_handler.handle_update,
+        webhook_secret=settings.telegram.webhook_secret.get_secret_value(),
+    )

@@ -18,7 +18,25 @@ uv run mypy
 uv run pytest
 ```
 
-Requer Python 3.12+ e [`uv`](https://docs.astral.sh/uv/).
+Requer Python 3.14+ e [`uv`](https://docs.astral.sh/uv/).
+
+## Servidor
+
+Com um Redis de pé em `REDIS__URL`:
+
+```bash
+uv run uvicorn src.main:app --reload --port 8080
+```
+
+`GET /health` responde `{"status": "ok"}`. O webhook do Telegram fica em
+`POST /webhook/telegram/{TELEGRAM__WEBHOOK_SECRET}`.
+
+Em desenvolvimento, exponha a porta com um túnel HTTPS e registre o webhook:
+
+```bash
+uv run python -m scripts.set_webhook https://<seu-tunel>
+uv run python -m scripts.delete_webhook   # desfaz
+```
 
 ## Smoke tests manuais
 
