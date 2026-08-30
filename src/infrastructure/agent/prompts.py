@@ -1,7 +1,16 @@
-"""O system prompt do turno.
+"""O system prompt do turno, dividido em duas partes.
 
-Uma função só. O prompt **não** descreve o que cada tool faz: isso já vem nas
-descrições publicadas pelo MCP server, e duplicar cria duas versões para divergir.
+`render_system_prompt()` é **estático**: papel, regras de agenda, catálogo de erros,
+estilo e limites. Não depende de nada do turno, então é o mesmo texto para todo
+cliente e toda invocação — é ele que serve de prefixo cacheável quando o prompt
+caching for ligado.
+
+`render_turn_context()` é o **volátil**: nome do cliente, data e hora atuais,
+primeiro contato. Muda a cada turno e por isso viaja numa mensagem separada, fora
+do bloco cacheável.
+
+Nenhuma das duas descreve o que cada tool faz: isso já vem nas descrições
+publicadas pelo MCP server, e duplicar cria duas versões para divergir.
 """
 
 from dataclasses import dataclass
@@ -20,19 +29,22 @@ _WEEKDAYS_PT = (
 
 @dataclass(frozen=True, slots=True)
 class PromptContext:
-    """O que o system prompt precisa e não vem do histórico."""
+    """O que o prompt do turno precisa e não vem do histórico."""
 
     client_name: str
     now: datetime
     is_new_client: bool
 
 
-def render_system_prompt(context: PromptContext) -> str:
-    """Monta o system prompt do turno, em pt-BR."""
+def render_system_prompt() -> str:
+    """Monta a parte estática do system prompt, em pt-BR.
+
+    Sem argumentos de propósito: o texto não pode variar por turno, senão deixa
+    de funcionar como prefixo de cache.
+    """
     return "\n\n".join(
         (
             _role(),
-            _turn_context(context),
             _agenda_rules(),
             _error_catalog(),
             _style(),
@@ -41,16 +53,8 @@ def render_system_prompt(context: PromptContext) -> str:
     )
 
 
-def _role() -> str:
-    return (
-        "Você é o atendente virtual de um estabelecimento no Telegram. Seu objetivo "
-        "é resolver o agendamento do cliente na própria conversa: marcar, consultar, "
-        "reagendar ou cancelar horários. Você age em nome do cliente, autenticado — "
-        "não peça nem confirme dados de cadastro."
-    )
-
-
-def _turn_context(context: PromptContext) -> str:
+def render_turn_context(context: PromptContext) -> str:
+    """Monta o bloco volátil do turno (cliente, data/hora, primeiro contato)."""
     now = context.now
     weekday = _WEEKDAYS_PT[now.weekday()]
     first_contact = (
@@ -66,6 +70,15 @@ def _turn_context(context: PromptContext) -> str:
     )
 
 
+def _role() -> str:
+    return (
+        "Você é o atendente virtual de um estabelecimento no Telegram. Seu objetivo "
+        "é resolver o agendamento do cliente na própria conversa: marcar, consultar, "
+        "reagendar ou cancelar horários. Você age em nome do cliente, autenticado — "
+        "não peça nem confirme dados de cadastro."
+    )
+
+
 def _agenda_rules() -> str:
     return (
         "Regras de agenda:\n"
@@ -77,7 +90,7 @@ def _agenda_rules() -> str:
         "- Para mudar um horário, prefira `reschedule_scheduling` a cancelar e marcar "
         "de novo.\n"
         '- Resolva datas relativas ("hoje", "amanhã", "sexta") contra a data atual '
-        "informada acima, e repita a data absoluta na confirmação.\n"
+        "informada no contexto do turno, e repita a data absoluta na confirmação.\n"
         "- Se faltar um dado para chamar uma tool (qual serviço, qual dia), pergunte "
         "antes de chamar."
     )

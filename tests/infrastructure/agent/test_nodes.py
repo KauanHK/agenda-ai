@@ -49,9 +49,12 @@ class TestCallModel:
 
         assert result["messages"][0].content == "olá"
         sent = model.received[0]
+        # Prompt estático, contexto volátil do turno, depois o histórico.
         assert isinstance(sent[0], SystemMessage)
-        assert "Kauan" in sent[0].content
-        assert isinstance(sent[1], HumanMessage)
+        assert "Kauan" not in sent[0].content
+        assert isinstance(sent[1], SystemMessage)
+        assert "Kauan" in sent[1].content
+        assert isinstance(sent[2], HumanMessage)
 
     async def test_vincula_as_tools_do_turno(self) -> None:
         model = FakeChatModel(responses=[AIMessage("ok")])
@@ -76,8 +79,8 @@ class TestCallModel:
             history_limit=3,
         )
 
-        # 1 system + 3 do histórico podado.
-        assert len(model.received[0]) == 4
+        # 2 system (estático + contexto do turno) + 3 do histórico podado.
+        assert len(model.received[0]) == 5
 
 
 class TestCallTools:
