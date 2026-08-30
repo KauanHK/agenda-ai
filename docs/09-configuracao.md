@@ -31,6 +31,7 @@ class Settings(BaseSettings):
 | `AGENDABOT__ESTABLISHMENT_TIMEZONE` | str | `America/Sao_Paulo` | data/hora do prompt |
 | `TELEGRAM__BOT_TOKEN` | `SecretStr` | — | Bot API |
 | `TELEGRAM__WEBHOOK_SECRET` | `SecretStr` | — | path secreto do webhook |
+| `TELEGRAM__API_ROOT` | str | `https://api.telegram.org` | raiz da Bot API (Local Bot API Server / testes) |
 | `REDIS__URL` | str | — | checkpointer + cache |
 | `LLM__PROVIDER` | `Literal["anthropic","openai"]` | `anthropic` | provider |
 | `LLM__MODEL` | str | `claude-sonnet-5` | modelo |

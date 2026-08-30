@@ -27,7 +27,9 @@ _CONTACT = Contact(
 
 @pytest.fixture
 async def messenger() -> AsyncIterator[TelegramMessenger]:
-    client = build_telegram_client(bot_token=_BOT_TOKEN, timeout_seconds=5.0)
+    client = build_telegram_client(
+        api_root="https://api.telegram.org", bot_token=_BOT_TOKEN, timeout_seconds=5.0
+    )
     async with client:
         yield TelegramMessenger(client)
 

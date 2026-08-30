@@ -17,19 +17,27 @@ from src.infrastructure.telegram.formatting import split_for_telegram, to_telegr
 
 logger = logging.getLogger(__name__)
 
-_TELEGRAM_API_ROOT = "https://api.telegram.org"
 _DEFAULT_RETRY_AFTER_SECONDS = 1.0
 
 
-def build_telegram_client(*, bot_token: str, timeout_seconds: float) -> httpx.AsyncClient:
+def build_telegram_client(
+    *,
+    api_root: str,
+    bot_token: str,
+    timeout_seconds: float,
+) -> httpx.AsyncClient:
     """Cria o `AsyncClient` da Bot API com o token embutido na `base_url`.
+
+    `api_root` vem da configuração (`TELEGRAM__API_ROOT`, padrão
+    `https://api.telegram.org`) para permitir apontar o bot a um Local Bot API
+    Server ou a um endpoint de teste/staging.
 
     O token vai na URL porque a Bot API exige (`/bot<token>/<método>`); como o
     `X-Service-Key` do AgendaBot, ele vive só dentro deste pacote e nunca entra
     em log nem em mensagem de erro.
     """
     return httpx.AsyncClient(
-        base_url=f"{_TELEGRAM_API_ROOT}/bot{bot_token}",
+        base_url=f"{api_root}/bot{bot_token}",
         timeout=httpx.Timeout(timeout_seconds),
     )
 
