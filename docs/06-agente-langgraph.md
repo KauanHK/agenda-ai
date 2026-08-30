@@ -65,8 +65,9 @@ async def call_model(
 ```
 
 1. Lê `tools` e o contexto de `config["configurable"]`.
-2. Renderiza o system prompt (`prompts.render_system_prompt(context)`).
-3. `model.bind_tools(tools)` e `ainvoke([system, *state["messages"]])`.
+2. Renderiza o prompt em duas partes: `prompts.render_system_prompt()` (estático) e
+   `prompts.render_turn_context(context)` (volátil), cada uma numa `SystemMessage`.
+3. `model.bind_tools(tools)` e `ainvoke([system, turn_context, *state["messages"]])`.
 4. Devolve `{"messages": [resposta]}`.
 
 O modelo em si vem do `container` já construído (`build_chat_model()`), injetado por
@@ -131,20 +132,29 @@ mensagem vazia ao Telegram — a API do Telegram rejeita texto vazio.
 
 ## System prompt
 
-`src/infrastructure/agent/prompts.py`, uma função só:
+`src/infrastructure/agent/prompts.py`, duas funções — a divisão é para o prompt
+caching:
 
 ```python
-def render_system_prompt(context: PromptContext) -> str:
-    """Monta o system prompt do turno."""
+def render_system_prompt() -> str:
+    """Parte estática: mesma para todo turno, serve de prefixo cacheável."""
+
+def render_turn_context(context: PromptContext) -> str:
+    """Parte volátil: cliente, data/hora, primeiro contato."""
 ```
+
+`call_model` emite as duas como `SystemMessage`s consecutivas, a estática primeiro.
+Quando o caching for ligado, o `cache_control` vai só na estática (forma de
+content-block); o contexto do turno fica de fora do bloco cacheável e a estrutura
+do prompt não muda.
 
 Estrutura do prompt (pt-BR):
 
 1. **Papel** — atendente do estabelecimento no Telegram; objetivo é resolver o
-   agendamento na conversa.
+   agendamento na conversa. *(estático)*
 2. **Contexto do turno** — nome do cliente, data e hora atuais com dia da semana e
-   fuso, se é o primeiro contato.
-3. **Regras de agenda**
+   fuso, se é o primeiro contato. *(volátil, `render_turn_context`)*
+3. **Regras de agenda** *(estático daqui para baixo)*
    - Só ofereça horários que apareceram em `list_available_slots`.
    - Nunca invente serviço, preço, duração ou horário.
    - Confirme serviço **e** horário antes de `create_scheduling`.

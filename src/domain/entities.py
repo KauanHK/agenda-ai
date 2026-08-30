@@ -46,6 +46,21 @@ class AgentAnswer:
 
 
 @dataclass(frozen=True, slots=True)
+class AgentContext:
+    """O contexto do turno que o system prompt precisa e não vem do histórico.
+
+    O nome do cliente e o "cliente novo" saem da sessão emitida, não das
+    mensagens: uma thread que expirou no Redis começa do zero, mas o cliente
+    continua sendo o mesmo do AgendaBot.
+    """
+
+    client_name: str
+    now: datetime
+    """Data e hora atuais, *timezone-aware*, no fuso do estabelecimento."""
+    is_new_client: bool
+
+
+@dataclass(frozen=True, slots=True)
 class BookingSession:
     """A sessão autenticada do cliente no AgendaBot."""
 
