@@ -8,14 +8,17 @@ Ordem de construção: Redis → checkpointer → clientes HTTP → sessão → 
 adapters do Telegram → casos de uso → roteador do webhook.
 """
 
+import asyncio
 import functools
 import logging
-from collections.abc import Callable, Coroutine, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
+
+from redis.exceptions import RedisError
 
 from src.application.use_cases.handle_incoming_message import HandleIncomingMessage
 from src.application.use_cases.open_booking_session import BookingSessionProvider
@@ -45,6 +48,11 @@ class Container:
 
     handle_update: Callable[[Mapping[str, Any]], Coroutine[Any, Any, None]]
     webhook_secret: str
+    check_readiness: Callable[[], Awaitable[dict[str, str]]]
+    """Relatório de *readiness*: `{"redis": "ok"}` ou `{"redis": "down"}`."""
+
+
+_READINESS_REDIS_TIMEOUT_SECONDS = 2.0
 
 
 async def build_container(settings: Settings) -> tuple[Container, AsyncExitStack]:
@@ -74,6 +82,15 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
     )
     redis_client = build_redis_client(settings.redis.url)
     stack.push_async_callback(redis_client.aclose)
+
+    async def check_readiness() -> dict[str, str]:
+        """`PING` no Redis com timeout curto; nunca levanta, só relata."""
+        try:
+            ping = cast("Awaitable[object]", redis_client.ping())
+            await asyncio.wait_for(ping, timeout=_READINESS_REDIS_TIMEOUT_SECONDS)
+        except RedisError, OSError, TimeoutError:
+            return {"redis": "down"}
+        return {"redis": "ok"}
 
     agendabot_client = await stack.enter_async_context(
         build_agendabot_client(
@@ -145,4 +162,5 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
     return Container(
         handle_update=webhook_handler.handle_update,
         webhook_secret=settings.telegram.webhook_secret.get_secret_value(),
+        check_readiness=check_readiness,
     )
