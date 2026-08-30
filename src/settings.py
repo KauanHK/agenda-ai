@@ -27,10 +27,11 @@ class AgendaBotSettings(BaseModel):
 
 
 class TelegramSettings(BaseModel):
-    """Credenciais do canal Telegram. Prefixo `TELEGRAM__`."""
+    """Credenciais e endpoint do canal Telegram. Prefixo `TELEGRAM__`."""
 
     bot_token: SecretStr
     webhook_secret: SecretStr
+    api_root: str = "https://api.telegram.org"
 
 
 class LLMSettings(BaseModel):
