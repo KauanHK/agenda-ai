@@ -30,6 +30,7 @@ checkpointer Redis, `trim_history`.
 Retry e timeouts revisados, logging estruturado, `Dockerfile`, `docker-compose.yml`,
 CI, teste de arquitetura.
 **Pronto quando:** sobe em produção atrás do nginx, com healthcheck verde.
+**Plano detalhado (uma PR por implementação):** [`12-plano-etapa-6.md`](12-plano-etapa-6.md).
 
 ## Depois (não nesta fase)
 1. Identidade real via `request_contact` — troca só o adapter da porta.

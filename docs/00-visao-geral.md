@@ -68,3 +68,4 @@ Telegram → webhook (FastAPI)
 | 09 | [`09-configuracao.md`](09-configuracao.md) | Settings, `.env`, dependências, deploy |
 | 10 | [`10-testes.md`](10-testes.md) | Estratégia de testes por camada |
 | 11 | [`11-roadmap.md`](11-roadmap.md) | Ordem de implementação em etapas |
+| 12 | [`12-plano-etapa-6.md`](12-plano-etapa-6.md) | Plano da Etapa 6 (Robustez), uma PR por implementação |
