@@ -23,6 +23,17 @@ class _ToolLoader(Protocol):
     async def get_tools(self) -> list[Any]: ...
 
 
+def _create_streamable_http_connection(
+    url: str,
+    session_token: str,
+) -> StreamableHttpConnection:
+    return {
+        "transport": "streamable_http",
+        "url": url,
+        "headers": {"Authorization": f"Bearer {session_token}"},
+    }
+
+
 ToolLoaderFactory = Callable[[dict[str, Connection]], _ToolLoader]
 
 
@@ -53,14 +64,17 @@ class AgendaBotToolProvider:
 
     async def tools_for(self, session_token: str) -> Sequence[Any]:
         """Abre uma conexão MCP autenticada e devolve as tools carregadas."""
-        connection: StreamableHttpConnection = {
-            "transport": "streamable_http",
-            "url": self._mcp_url,
-            "headers": {"Authorization": f"Bearer {session_token}"},
-        }
+        connection = _create_streamable_http_connection(
+            url=self._mcp_url,
+            session_token=session_token,
+        )
         connections: dict[str, Connection] = {_SERVER_NAME: connection}
         loader = self._loader_factory(connections)
 
+        return await self._load_tools(loader)
+
+    async def _load_tools(self, loader: _ToolLoader) -> Sequence[Any]:
+        """Carrega as tools via MCP com timeout, traduzindo qualquer falha para o domínio."""
         try:
             async with asyncio.timeout(self._timeout_seconds):
                 return await loader.get_tools()
