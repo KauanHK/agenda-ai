@@ -48,9 +48,18 @@ async def _invoke(
     except Exception as exc:
         # A falha da tool volta ao modelo como resultado, não derruba o turno.
         return _failure(call, str(exc))
+    return _as_tool_message(call, result)
+
+
+def _as_tool_message(call: ToolCall, result: object) -> ToolMessage:
+    """Normaliza o retorno da tool: já é `ToolMessage` ou vira conteúdo de texto."""
     if isinstance(result, ToolMessage):
         return result
-    return ToolMessage(content=str(result), tool_call_id=call["id"] or "", name=call["name"])
+    return ToolMessage(
+        content=str(result),
+        tool_call_id=call["id"] or "",
+        name=call["name"],
+    )
 
 
 def _failure(call: ToolCall, reason: str) -> ToolMessage:
