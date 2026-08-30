@@ -128,7 +128,8 @@ async def _build_turn_handler(
         build_agendabot_client(
             base_url=settings.agendabot.api_url,
             service_key=settings.agendabot.service_key.get_secret_value(),
-            timeout_seconds=settings.http.timeout_seconds,
+            connect_timeout_seconds=settings.http.connect_timeout_seconds,
+            read_timeout_seconds=settings.http.timeout_seconds,
         )
     )
     session_provider = BookingSessionProvider(

@@ -45,7 +45,9 @@ class Settings(BaseSettings):
 | `CONVERSATION__MAX_INPUT_CHARS` | int | `1000` | truncamento da mensagem do cliente |
 | `CONVERSATION__SESSION_REFRESH_MARGIN_SECONDS` | int | `60` | margem antes de expirar |
 | `IDENTITY__SYNTHETIC_PHONE_PREFIX` | str | `5547999` | identidade da fase 1 |
-| `HTTP__TIMEOUT_SECONDS` | float | `10.0` | API do AgendaBot e Telegram |
+| `HTTP__TIMEOUT_SECONDS` | float | `10.0` | read/write/pool da API do AgendaBot |
+| `HTTP__CONNECT_TIMEOUT_SECONDS` | float | `5.0` | abrir conexão TCP+TLS (AgendaBot e Telegram) |
+| `HTTP__TELEGRAM_READ_TIMEOUT_SECONDS` | float | `5.0` | read/write/pool da Bot API do Telegram |
 | `HTTP__MCP_TIMEOUT_SECONDS` | float | `15.0` | carregamento e execução de tools |
 | `OBSERVABILITY__LOG_LEVEL` | str | `INFO` | logging |
 
@@ -139,3 +141,24 @@ desfaz.
   entre réplicas — aceitável nesta fase (mensagens em rajada são raras em agendamento).
 - Logs em JSON no stdout, com `thread_id` em todo registro do turno. O telefone
   sintético e o `session_token` **nunca** são logados.
+
+## 9.6 Política de retry e timeout por adapter
+
+Cada integração de rede tem uma política própria, ditada pela idempotência da
+operação e pelo custo de uma falha. O quadro abaixo é o contrato — mudou o
+comportamento de um adapter, atualiza aqui.
+
+| Adapter | Arquivo | `connect` | `read` / `write` / `pool` | Retry | Repete o quê | Falha terminal vira |
+| --- | --- | --- | --- | --- | --- | --- |
+| Emissão de sessão | `agendabot/session_issuer.py` | `HTTP__CONNECT_TIMEOUT_SECONDS` (5 s) | `HTTP__TIMEOUT_SECONDS` (10 s) | até 3 tentativas, backoff exponencial de 200 ms | `ConnectError`, `TimeoutException` (connect/read/write/pool), `5xx` | `BookingSessionError` (`403` → `ClientBlockedError`; `4xx` nunca repete) |
+| Tools MCP | `agendabot/tool_provider.py` | — (timeout total) | `HTTP__MCP_TIMEOUT_SECONDS` (15 s), `asyncio.timeout` | **nenhum** — handshake MCP não é comprovadamente idempotente | — | `BookingSessionError` |
+| Envio ao Telegram (`sendMessage`) | `telegram/client.py` | `HTTP__CONNECT_TIMEOUT_SECONDS` (5 s) | `HTTP__TELEGRAM_READ_TIMEOUT_SECONDS` (5 s) | 1 vez **só** em `ConnectError` / `ConnectTimeout`; `429` respeita `retry_after` e tenta 1 vez | falha ao abrir a conexão (request não saiu) | `DeliveryError` |
+| `sendChatAction` (digitando) | `telegram/client.py` | idem | idem | nenhum | — | engolido (log em `debug`) |
+| Checkpointer (histórico) | `redis/checkpointer.py` | — | — | nenhum | — | `ConversationStateError` (turno cai de forma visível) |
+| Cache de sessão | `redis/session_cache.py` | — | — | nenhum | — | engolido: `get` → `None`, `put` no-op, log em `warning`; o provider reemite |
+| Grafo do agente | `agent/runner.py` | — | — | `recursion_limit` = `MAX_AGENT_STEPS * 2 + 1` | os ciclos do próprio grafo | `AgentUnavailableError` (também para qualquer falha do LLM) |
+
+Regra por trás do quadro: só se repete o que é seguramente reentrante. Emitir a
+sessão é (o AgendaBot resolve o cliente pelo telefone); `sendMessage` **não** é
+depois que o request parte — repetir ali duplicaria a mensagem, então só um erro
+de conexão (que garante que nada saiu) é repetível.

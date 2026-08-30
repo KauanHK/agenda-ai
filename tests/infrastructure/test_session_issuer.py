@@ -31,7 +31,10 @@ _CREATED_BODY = {
 @pytest.fixture
 async def client() -> AsyncIterator[httpx.AsyncClient]:
     async with build_agendabot_client(
-        base_url=_BASE_URL, service_key=_SERVICE_KEY, timeout_seconds=5.0
+        base_url=_BASE_URL,
+        service_key=_SERVICE_KEY,
+        connect_timeout_seconds=5.0,
+        read_timeout_seconds=5.0,
     ) as c:
         yield c
 
@@ -133,15 +136,35 @@ async def test_500_e_depois_201_devolve_a_sessao(client: httpx.AsyncClient) -> N
     assert route.call_count == 2
 
 
-async def test_read_timeout_vira_booking_session_error_sem_retry(
-    client: httpx.AsyncClient,
+@pytest.mark.parametrize(
+    "timeout",
+    [
+        httpx.ConnectTimeout("lento ao conectar"),
+        httpx.ReadTimeout("lento ao ler"),
+        httpx.WriteTimeout("lento ao escrever"),
+        httpx.PoolTimeout("sem conexão no pool"),
+    ],
+)
+async def test_timeout_e_repetido_e_entao_vira_booking_session_error(
+    client: httpx.AsyncClient, timeout: httpx.TimeoutException
 ) -> None:
     with respx.mock:
-        route = respx.post(_URL).mock(side_effect=httpx.ReadTimeout("lento"))
+        route = respx.post(_URL).mock(side_effect=timeout)
         with pytest.raises(BookingSessionError):
             await _issuer(client, max_attempts=3).issue(_PHONE, "Kauan")
 
-    assert route.call_count == 1
+    assert route.call_count == 3
+
+
+async def test_timeout_e_depois_201_devolve_a_sessao(client: httpx.AsyncClient) -> None:
+    with respx.mock:
+        route = respx.post(_URL).mock(
+            side_effect=[httpx.ReadTimeout("lento"), httpx.Response(201, json=_CREATED_BODY)]
+        )
+        session = await _issuer(client, max_attempts=3).issue(_PHONE, "Kauan")
+
+    assert session.token == "jwt-real-do-estabelecimento"
+    assert route.call_count == 2
 
 
 async def test_corpo_201_malformado_vira_booking_session_error(

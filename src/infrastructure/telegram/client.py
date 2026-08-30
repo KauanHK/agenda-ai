@@ -18,13 +18,18 @@ from src.infrastructure.telegram.formatting import split_for_telegram, to_telegr
 logger = logging.getLogger(__name__)
 
 _DEFAULT_RETRY_AFTER_SECONDS = 1.0
+_CONNECT_RETRY_DELAY_SECONDS = 0.5
+# Só falha ao abrir a conexão é repetível: aí o request não saiu e `sendMessage`
+# não corre risco de duplicar a mensagem.
+_CONNECT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout)
 
 
 def build_telegram_client(
     *,
     api_root: str,
     bot_token: str,
-    timeout_seconds: float,
+    connect_timeout_seconds: float,
+    read_timeout_seconds: float,
 ) -> httpx.AsyncClient:
     """Cria o `AsyncClient` da Bot API com o token embutido na `base_url`.
 
@@ -35,18 +40,27 @@ def build_telegram_client(
     O token vai na URL porque a Bot API exige (`/bot<token>/<método>`); como o
     `X-Service-Key` do AgendaBot, ele vive só dentro deste pacote e nunca entra
     em log nem em mensagem de erro.
+
+    O teto de leitura é curto (`telegram_read_timeout_seconds`): a Bot API
+    responde depressa e um `read` pendurado só atrasa o turno.
     """
     return httpx.AsyncClient(
         base_url=f"{api_root}/bot{bot_token}",
-        timeout=httpx.Timeout(timeout_seconds),
+        timeout=httpx.Timeout(read_timeout_seconds, connect=connect_timeout_seconds),
     )
 
 
 class TelegramMessenger:
     """Implementa `OutboundMessengerProtocol` sobre a Bot API."""
 
-    def __init__(self, client: httpx.AsyncClient) -> None:
+    def __init__(
+        self,
+        client: httpx.AsyncClient,
+        *,
+        connect_retry_delay_seconds: float = _CONNECT_RETRY_DELAY_SECONDS,
+    ) -> None:
         self._client = client
+        self._connect_retry_delay_seconds = connect_retry_delay_seconds
 
     async def send_text(self, contact: Contact, text: str) -> None:
         """Normaliza o texto, quebra no teto de 4096 e envia pedaço a pedaço."""
@@ -84,14 +98,39 @@ class TelegramMessenger:
             raise DeliveryError(f"O Telegram recusou o envio (HTTP {response.status_code}).")
 
     async def _post_message(self, chat_id: str, text: str) -> httpx.Response:
-        """Faz o `POST /sendMessage`, traduzindo falha de transporte em `DeliveryError`."""
+        """Faz o `POST /sendMessage`, traduzindo falha de transporte em `DeliveryError`.
+
+        Repete **uma única vez** e **só** quando a conexão sequer chegou a ser
+        aberta (`ConnectError` / `ConnectTimeout`): aí o request não saiu e não há
+        risco de mensagem duplicada. Depois que o request parte — inclusive num
+        `ReadTimeout` — a falha vira `DeliveryError` sem repetição.
+        """
+        body = {"chat_id": chat_id, "text": text}
         try:
-            return await self._client.post("/sendMessage", json={"chat_id": chat_id, "text": text})
+            return await self._client.post("/sendMessage", json=body)
+        except _CONNECT_ERRORS as exc:
+            logger.warning(
+                "Conexão com o Telegram falhou (%s); repetindo o envio uma vez",
+                type(exc).__name__,
+            )
         except httpx.HTTPError as exc:
-            # `from None`: o `__cause__` de um erro do httpx carrega a URL com o
-            # token do bot, e este erro pode ser logado com o stacktrace inteiro.
-            logger.warning("Falha de transporte ao enviar ao Telegram: %s", type(exc).__name__)
-            raise DeliveryError("Falha de transporte ao falar com o Telegram.") from None
+            raise self._delivery_error(exc) from None
+
+        await asyncio.sleep(self._connect_retry_delay_seconds)
+        try:
+            return await self._client.post("/sendMessage", json=body)
+        except httpx.HTTPError as exc:
+            raise self._delivery_error(exc) from None
+
+    @staticmethod
+    def _delivery_error(exc: httpx.HTTPError) -> DeliveryError:
+        """Loga o tipo da falha e devolve o erro de domínio (levantar com `from None`).
+
+        `from None` no `raise`: o `__cause__` de um erro do httpx carrega a URL
+        com o token do bot, e este erro pode ser logado com o stacktrace inteiro.
+        """
+        logger.warning("Falha de transporte ao enviar ao Telegram: %s", type(exc).__name__)
+        return DeliveryError("Falha de transporte ao falar com o Telegram.")
 
 
 def _retry_after(response: httpx.Response) -> float:

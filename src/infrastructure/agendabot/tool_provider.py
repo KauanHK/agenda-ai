@@ -49,6 +49,10 @@ class AgendaBotToolProvider:
     `401`, servidor fora do ar, tempo esgotado — vira `BookingSessionError`: o
     caminho principal a trata como as demais falhas de sessão, com uma resposta
     em linguagem natural para o cliente.
+
+    **Sem retry**, de propósito: o handshake do protocolo MCP não é comprovadamente
+    idempotente, e o custo de uma falha aqui é só uma resposta em linguagem natural
+    (nada é perdido). O único controle é o timeout total, `HTTP__MCP_TIMEOUT_SECONDS`.
     """
 
     def __init__(
