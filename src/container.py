@@ -51,7 +51,7 @@ async def build_container(settings: Settings) -> tuple[Container, AsyncExitStack
     """Constrói as dependências e devolve o stack que as fecha no shutdown."""
     stack = AsyncExitStack()
     try:
-        container = await _wire(settings, stack)
+        container = await _wire(settings=settings, stack=stack)
     except BaseException:
         await stack.aclose()
         raise
@@ -84,6 +84,7 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
     )
     telegram_client = await stack.enter_async_context(
         build_telegram_client(
+            api_root=settings.telegram.api_root,
             bot_token=settings.telegram.bot_token.get_secret_value(),
             timeout_seconds=settings.http.timeout_seconds,
         )

@@ -6,7 +6,7 @@ fechado no shutdown.
 """
 
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Monta a aplicação. Sem `settings`, carrega a configuração do ambiente."""
-    resolved_settings = settings or Settings()
+    resolved_settings = settings or Settings()  # pyright: ignore[reportCallIssue]
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         container, stack = await build_container(resolved_settings)
         app.state.container = container
         app.state.background_tasks = set()

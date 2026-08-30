@@ -9,7 +9,7 @@ import logging
 from src.interfaces.http.app import create_app
 from src.settings import Settings
 
-settings = Settings()
+settings = Settings()  # pyright: ignore[reportCallIssue]
 
 logging.basicConfig(
     level=settings.observability.log_level.upper(),
