@@ -119,7 +119,7 @@ class LangGraphAgentRunner:
             raise AgentUnavailableError("O agente excedeu o número de passos do turno.") from exc
         except RedisError as exc:
             raise ConversationStateError("Falha ao ler ou gravar o histórico da conversa.") from exc
-        except (AgentUnavailableError, ConversationStateError):
+        except AgentUnavailableError, ConversationStateError:
             raise
         except Exception as exc:
             # Toda falha restante do LLM ou do grafo vira erro de domínio.

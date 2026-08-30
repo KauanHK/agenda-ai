@@ -40,7 +40,5 @@ async def call_model(
     system = SystemMessage(render_system_prompt())
     turn_context = SystemMessage(render_turn_context(context))
     history = trim_history(state["messages"], history_limit)
-    answer = await model.bind_tools(turn["tools"]).ainvoke(
-        [system, turn_context, *history], config
-    )
+    answer = await model.bind_tools(turn["tools"]).ainvoke([system, turn_context, *history], config)
     return {"messages": [answer]}
