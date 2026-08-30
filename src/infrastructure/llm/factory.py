@@ -41,11 +41,13 @@ def _build_anthropic(settings: LLMSettings, api_key: SecretStr) -> BaseChatModel
     """Constrói o chat model da Anthropic."""
     from langchain_anthropic import ChatAnthropic
 
+    # O construtor aceita os nomes de campo (populate_by_name), mas o Pyright só
+    # reconhece os aliases; o pydantic.mypy valida a chamada de verdade.
     return ChatAnthropic(
-        model=settings.model,
-        anthropic_api_key=api_key,
+        model=settings.model,  # pyright: ignore[reportCallIssue]
+        anthropic_api_key=api_key,  # pyright: ignore[reportCallIssue]
         temperature=settings.temperature,
-        max_tokens=settings.max_tokens,
+        max_tokens=settings.max_tokens,  # pyright: ignore[reportCallIssue]
     )
 
 
