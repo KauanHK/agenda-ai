@@ -20,10 +20,13 @@ from src.infrastructure.telegram.commands import (
     WELCOME_MESSAGE,
     match_command,
 )
+from src.logging_config import bind_thread_id
 
 logger = logging.getLogger(__name__)
 
 ParseUpdate = Callable[[Mapping[str, Any]], IncomingMessage | None]
+
+_FAILURE_MSG = "Falha ao processar um update do Telegram"
 
 
 class TelegramWebhookHandler:
@@ -45,26 +48,36 @@ class TelegramWebhookHandler:
     async def handle_update(self, payload: Mapping[str, Any]) -> None:
         """Trata um update do webhook. Nunca levanta: o webhook já respondeu `200`."""
         try:
-            await self._route(payload)
+            message = self._parse_update(payload)
+            if message is None:
+                return
+            ref = ConversationRef(
+                channel=message.contact.channel,
+                channel_user_id=message.contact.channel_user_id,
+            )
         except Exception:
-            logger.exception("Falha ao processar um update do Telegram")
-
-    async def _route(self, payload: Mapping[str, Any]) -> None:
-        message = self._parse_update(payload)
-        if message is None:
+            logger.exception(_FAILURE_MSG)
             return
+
+        # Todo `logger.*` deste turno — inclusive o de falha — sai carimbado com
+        # o `thread_id`, por isso o `try` do turno fica dentro do `bind`.
+        with bind_thread_id(ref.thread_id):
+            try:
+                await self._route(message, ref)
+            except Exception:
+                logger.exception(_FAILURE_MSG)
+
+    async def _route(self, message: IncomingMessage, ref: ConversationRef) -> None:
         command = match_command(message.text)
         if command in RESET_COMMANDS:
-            await self._run_reset(message, command)
+            await self._run_reset(message, ref, command)
             return
         await self._handle_incoming_message.execute(message)
 
-    async def _run_reset(self, message: IncomingMessage, command: str | None) -> None:
+    async def _run_reset(
+        self, message: IncomingMessage, ref: ConversationRef, command: str | None
+    ) -> None:
         """Limpa o histórico e responde com o texto fixo do comando."""
-        ref = ConversationRef(
-            channel=message.contact.channel,
-            channel_user_id=message.contact.channel_user_id,
-        )
         try:
             await self._reset_conversation.execute(ref)
         except AgentError as error:
