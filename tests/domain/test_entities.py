@@ -5,7 +5,14 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.domain.entities import AgentAnswer, Channel, Contact, ConversationRef, IncomingMessage
+from src.domain.entities import (
+    AgentAnswer,
+    AgentContext,
+    Channel,
+    Contact,
+    ConversationRef,
+    IncomingMessage,
+)
 
 
 class TestConversationRef:
@@ -52,3 +59,13 @@ def test_incoming_message_guarda_o_contato_e_o_texto() -> None:
 
 def test_agent_answer_conta_as_tool_calls_do_turno() -> None:
     assert AgentAnswer(text="pronto", tool_calls_made=3).tool_calls_made == 3
+
+
+def test_agent_context_e_imutavel() -> None:
+    context = AgentContext(
+        client_name="Kauan",
+        now=datetime(2026, 8, 28, 9, 0, tzinfo=UTC),
+        is_new_client=True,
+    )
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        context.client_name = "outro"  # type: ignore[misc]

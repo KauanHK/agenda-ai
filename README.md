@@ -19,3 +19,13 @@ uv run pytest
 ```
 
 Requer Python 3.12+ e [`uv`](https://docs.astral.sh/uv/).
+
+## Smoke tests manuais
+
+Rodam contra o ambiente real, lendo o `.env`; não fazem parte da suíte.
+
+```bash
+uv run python -m scripts.smoke_mcp     # emite a sessão e lista as tools do MCP
+uv run python -m scripts.repl          # conversa com o agente no terminal
+uv run python -m scripts.repl --memory # sem Redis (checkpointer e cache em memória)
+```
