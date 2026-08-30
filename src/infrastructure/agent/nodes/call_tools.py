@@ -25,8 +25,13 @@ async def call_tools(
     last = state["messages"][-1]
     tool_calls = last.tool_calls if isinstance(last, AIMessage) else []
 
-    results = await asyncio.gather(*(_invoke(tools_by_name, call, config) for call in tool_calls))
-    return {"messages": list(results)}
+    async with asyncio.TaskGroup() as tg:
+        tasks = [
+            tg.create_task(_invoke(tools_by_name=tools_by_name, call=call, config=config))
+            for call in tool_calls
+        ]
+    results: list[AnyMessage] = [task.result() for task in tasks]
+    return {"messages": results}
 
 
 async def _invoke(
