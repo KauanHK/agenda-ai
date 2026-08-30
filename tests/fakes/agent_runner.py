@@ -4,17 +4,20 @@ from collections.abc import Sequence
 from typing import Any
 
 from src.domain.entities import AgentAnswer, AgentContext, ConversationRef
-from src.domain.exceptions import AgentError
 
 
 class FakeAgentRunner:
-    """Devolve uma resposta roteirizada (ou levanta) e registra cada turno."""
+    """Devolve uma resposta roteirizada (ou levanta) e registra cada turno.
+
+    `error` aceita qualquer exceção, não só `AgentError`: o caminho principal
+    precisa cobrir também a falha inesperada que escapa do runner.
+    """
 
     def __init__(
         self,
         answer: AgentAnswer | None = None,
         *,
-        error: AgentError | None = None,
+        error: BaseException | None = None,
     ) -> None:
         self._answer = answer or AgentAnswer(text="ok", tool_calls_made=0)
         self._error = error
