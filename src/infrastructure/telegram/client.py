@@ -58,17 +58,27 @@ class TelegramMessenger:
         try:
             await self._client.post(
                 "/sendChatAction",
-                json={"chat_id": contact.channel_user_id, "action": "typing"},
+                json={
+                    "chat_id": contact.channel_user_id,
+                    "action": "typing",
+                },
             )
         except httpx.HTTPError as exc:
             logger.debug("sendChatAction falhou (%s); seguindo sem o indicador", type(exc).__name__)
 
     async def _send_message(self, chat_id: str, text: str, *, allow_retry: bool = True) -> None:
         """Envia um pedaço; num `429` respeita o `retry_after` e tenta uma vez."""
-        response = await self._post_message(chat_id, text)
+        response = await self._post_message(
+            chat_id=chat_id,
+            text=text,
+        )
         if response.status_code == httpx.codes.TOO_MANY_REQUESTS and allow_retry:
             await asyncio.sleep(_retry_after(response))
-            await self._send_message(chat_id, text, allow_retry=False)
+            await self._send_message(
+                chat_id=chat_id,
+                text=text,
+                allow_retry=False,
+            )
             return
         if response.is_error:
             raise DeliveryError(f"O Telegram recusou o envio (HTTP {response.status_code}).")

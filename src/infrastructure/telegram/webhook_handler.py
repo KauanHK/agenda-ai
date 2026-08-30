@@ -61,7 +61,10 @@ class TelegramWebhookHandler:
 
     async def _run_reset(self, message: IncomingMessage, command: str | None) -> None:
         """Limpa o histórico e responde com o texto fixo do comando."""
-        ref = ConversationRef(message.contact.channel, message.contact.channel_user_id)
+        ref = ConversationRef(
+            channel=message.contact.channel,
+            channel_user_id=message.contact.channel_user_id,
+        )
         try:
             await self._reset_conversation.execute(ref)
         except AgentError as error:
