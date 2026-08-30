@@ -6,7 +6,8 @@ calls e traduz as falhas do LangGraph/LLM/checkpointer em erros do domínio.
 """
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
+from contextlib import contextmanager
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -78,25 +79,48 @@ class LangGraphAgentRunner:
         user_text: str,
         config: RunnableConfig,
     ) -> tuple[AIMessage | None, int]:
+        """Dirige o grafo por um turno, traduzindo as falhas em erros do domínio."""
+        turn_input = {"messages": [HumanMessage(user_text)]}
+        with self._domain_errors():
+            return await self._consume_stream(turn_input, config)
+
+    async def _consume_stream(
+        self,
+        turn_input: dict[str, Any],
+        config: RunnableConfig,
+    ) -> tuple[AIMessage | None, int]:
         """Consome o stream do grafo, guardando a última resposta e contando as tools."""
         last_answer: AIMessage | None = None
         tool_calls_made = 0
-        turn_input = {"messages": [HumanMessage(user_text)]}
+        async for update in self._graph.astream(turn_input, config, stream_mode="updates"):
+            for node, payload in update.items():
+                answer, tool_calls = self._read_node(node, payload)
+                tool_calls_made += tool_calls
+                if answer is not None:
+                    last_answer = answer
+        return last_answer, tool_calls_made
+
+    @staticmethod
+    def _read_node(node: str, payload: Any) -> tuple[AIMessage | None, int]:
+        """Extrai de um update do grafo a resposta do modelo e o número de tool calls."""
+        messages = payload.get("messages", []) if isinstance(payload, dict) else []
+        if node == "call_tools":
+            return None, len(messages)
+        if node == "call_model" and messages and isinstance(messages[-1], AIMessage):
+            return messages[-1], 0
+        return None, 0
+
+    @contextmanager
+    def _domain_errors(self) -> Generator[None]:
+        """Traduz as falhas do LangGraph, do checkpointer e do LLM em erros do domínio."""
         try:
-            async for update in self._graph.astream(turn_input, config, stream_mode="updates"):
-                for node, payload in update.items():
-                    messages = payload.get("messages", []) if isinstance(payload, dict) else []
-                    if node == "call_tools":
-                        tool_calls_made += len(messages)
-                    elif node == "call_model" and messages and isinstance(messages[-1], AIMessage):
-                        last_answer = messages[-1]
+            yield
         except GraphRecursionError as exc:
             raise AgentUnavailableError("O agente excedeu o número de passos do turno.") from exc
         except RedisError as exc:
             raise ConversationStateError("Falha ao ler ou gravar o histórico da conversa.") from exc
-        except AgentUnavailableError, ConversationStateError:
+        except (AgentUnavailableError, ConversationStateError):
             raise
         except Exception as exc:
             # Toda falha restante do LLM ou do grafo vira erro de domínio.
             raise AgentUnavailableError("O modelo falhou ao responder o turno.") from exc
-        return last_answer, tool_calls_made
