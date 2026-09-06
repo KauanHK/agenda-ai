@@ -12,7 +12,7 @@ num log. Hoje nenhum `logger.*` os passa — ao logar algo novo, não inclua o
 
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import UTC, datetime
@@ -52,7 +52,7 @@ _RESERVED_ATTRS = frozenset(
 
 
 @contextmanager
-def bind_thread_id(thread_id: str) -> Iterator[None]:
+def bind_thread_id(thread_id: str) -> Generator[None]:
     """Amarra o `thread_id` ao contexto do turno; solta ao sair do bloco."""
     token = _thread_id_var.set(thread_id)
     try:

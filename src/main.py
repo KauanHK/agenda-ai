@@ -10,8 +10,6 @@ from src.settings import Settings
 
 settings = Settings()  # pyright: ignore[reportCallIssue]
 
-# Cobre o que loga antes da app existir; `create_app` chama de novo (idempotente,
-# `force=True`) para pegar o `TestClient` e o `uvicorn --reload`.
 configure_logging(settings.observability.log_level)
 
 app = create_app(settings)

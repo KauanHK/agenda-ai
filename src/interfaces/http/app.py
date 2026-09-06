@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Monta a aplicação. Sem `settings`, carrega a configuração do ambiente."""
     resolved_settings = settings or Settings()  # pyright: ignore[reportCallIssue]
-    # Aqui pega o `TestClient` e o `uvicorn --reload`, que não passam por `main`.
     configure_logging(resolved_settings.observability.log_level)
 
     @asynccontextmanager
