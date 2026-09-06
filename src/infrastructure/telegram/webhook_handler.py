@@ -61,7 +61,8 @@ class TelegramWebhookHandler:
                 logger.exception(_FAILURE_MSG)
 
     def _parse(
-        self, payload: Mapping[str, Any]
+        self,
+        payload: Mapping[str, Any],
     ) -> tuple[IncomingMessage, ConversationRef] | None:
         """Extrai a mensagem e o `ConversationRef` do update, ou `None` se não houver
         mensagem tratável. Nunca levanta: registra a falha e devolve `None`."""
