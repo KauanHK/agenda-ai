@@ -10,7 +10,8 @@ a arquitetura proíbe:
 * `infrastructure.*`      → `domain` + `application` + `settings` + libs externas,
   **nunca** `interfaces` nem a *composition root* (`container` / `main`);
 * `interfaces.*`          → `application` + `container` + `settings` + `fastapi` + stdlib;
-* `container` / `main`    → livre.
+* `container` / `main`    → livre;
+* `logging_config`        → só stdlib; importável por qualquer camada.
 
 Reforça, num teste dedicado, o princípio 3 do doc 01: `httpx`, `redis`,
 `telegram`, `langgraph` e `langchain*` são proibidos em `domain` e `application`.
@@ -43,6 +44,7 @@ _INTERFACES = "interfaces"
 _CONTAINER = "container"
 _MAIN = "main"
 _SETTINGS = "settings"
+_LOGGING = "logging_config"  # `src/logging_config.py` — cross-cutting, só stdlib
 _ROOT = "root"  # `src/__init__.py`
 
 # Prefixos das bibliotecas de I/O que o princípio 3 do doc 01 nomeia como
@@ -80,6 +82,8 @@ def _classify(module: str) -> str | None:
         return _MAIN
     if rest == "settings":
         return _SETTINGS
+    if rest == "logging_config":
+        return _LOGGING
     return None
 
 
@@ -95,9 +99,19 @@ _ALLOWED_INTERNAL: dict[str, set[str] | None] = {
     _PORTS: {_DOMAIN, _PORTS},
     _USE_CASES: {_DOMAIN, _PORTS, _USE_CASES},
     _APPLICATION: {_DOMAIN, _APPLICATION, _PORTS, _USE_CASES},
-    _INFRA: {_DOMAIN, _APPLICATION, _PORTS, _USE_CASES, _INFRA, _SETTINGS},
-    _INTERFACES: {_APPLICATION, _PORTS, _USE_CASES, _INTERFACES, _CONTAINER, _MAIN, _SETTINGS},
+    _INFRA: {_DOMAIN, _APPLICATION, _PORTS, _USE_CASES, _INFRA, _SETTINGS, _LOGGING},
+    _INTERFACES: {
+        _APPLICATION,
+        _PORTS,
+        _USE_CASES,
+        _INTERFACES,
+        _CONTAINER,
+        _MAIN,
+        _SETTINGS,
+        _LOGGING,
+    },
     _SETTINGS: {_SETTINGS, _DOMAIN},
+    _LOGGING: {_LOGGING},
     _CONTAINER: None,
     _MAIN: None,
     _ROOT: None,
@@ -113,6 +127,7 @@ _ALLOWED_THIRD_PARTY: dict[str, frozenset[str] | None] = {
     _INFRA: None,
     _INTERFACES: frozenset({"fastapi"}),
     _SETTINGS: frozenset({"pydantic", "pydantic_settings"}),
+    _LOGGING: frozenset(),
     _CONTAINER: None,
     _MAIN: None,
     _ROOT: None,

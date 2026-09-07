@@ -48,6 +48,7 @@ agente-agenda/
 │   ├── main.py                       # entrypoint uvicorn
 │   ├── container.py                  # composition root: monta as dependências
 │   ├── settings.py                   # pydantic-settings
+│   ├── logging_config.py             # logging estruturado JSON (só stdlib)
 │   │
 │   ├── domain/
 │   │   ├── entities.py               # Contact, IncomingMessage, AgentAnswer, ...
@@ -116,6 +117,7 @@ agente-agenda/
 | `infrastructure.*` | `domain`, `application.ports`, libs externas |
 | `interfaces.*` | `application`, `container`, `fastapi` |
 | `container` | tudo |
+| `logging_config` | só stdlib (importável por qualquer camada) |
 
 Um teste de arquitetura (`tests/test_dependencies.py`) percorre os imports com `ast` e
 falha se a tabela acima for violada.
