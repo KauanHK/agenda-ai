@@ -23,5 +23,7 @@ docs/
 tests/
 *.md
 .vscode/
+docker-compose*.yml
+nginx/
 
 # scripts/ é mantido de propósito: o set_webhook roda dentro do container no deploy.

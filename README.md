@@ -34,6 +34,13 @@ uv run uvicorn src.main:app --reload --port 8080
 com `{"redis": "down"}`. O webhook do Telegram fica em
 `POST /webhook/telegram/{TELEGRAM__WEBHOOK_SECRET}`.
 
+Para subir a stack completa (nginx + api + redis) via Docker — em dev a imagem é
+construída localmente e o nginx expõe a porta `8080`:
+
+```bash
+docker compose up --build
+```
+
 Em desenvolvimento, exponha a porta com um túnel HTTPS e registre o webhook:
 
 ```bash
