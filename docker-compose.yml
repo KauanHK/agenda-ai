@@ -1,7 +1,3 @@
-# Stack de produção: só imagens publicadas, sem `build`.
-# O `docker-compose.override.yml` (carregado automático em dev) acrescenta
-# `build`, portas e uma rede `web` local.
-
 x-logging: &logging
   driver: json-file
   options:
@@ -23,7 +19,7 @@ services:
     logging: *logging
 
   api:
-    image: ghcr.io/${GITHUB_REPOSITORY:-kauanhk/agenda-ai-agent}:latest
+    image: ghcr.io/${GITHUB_REPOSITORY}:latest
     container_name: agente-agenda-api
     restart: unless-stopped
     env_file: ./.env

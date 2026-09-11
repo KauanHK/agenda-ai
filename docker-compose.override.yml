@@ -1,7 +1,3 @@
-# Carregado automático pelo `docker compose` em desenvolvimento.
-# Constrói a imagem local, publica as portas e troca a rede `web` externa
-# por uma rede local (não é preciso `docker network create web`).
-
 services:
   api:
     build:
