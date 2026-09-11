@@ -28,8 +28,10 @@ Com um Redis de pé em `REDIS__URL`:
 uv run uvicorn src.main:app --reload --port 8080
 ```
 
-`GET /health` responde `{"status": "ok"}` (liveness); `GET /health/ready` faz `PING`
-no Redis e responde `503` se ele estiver fora. O webhook do Telegram fica em
+`GET /health` responde `{"status": "ok"}` enquanto o processo está de pé
+(*liveness*, usado pelo healthcheck do container). `GET /health/ready` é
+*readiness*: dá `PING` no Redis e responde `200` com `{"redis": "ok"}` ou `503`
+com `{"redis": "down"}`. O webhook do Telegram fica em
 `POST /webhook/telegram/{TELEGRAM__WEBHOOK_SECRET}`.
 
 Para subir a stack completa (nginx + api + redis) via Docker — em dev a imagem é

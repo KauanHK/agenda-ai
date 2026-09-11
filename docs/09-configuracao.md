@@ -154,8 +154,12 @@ docker compose up --build
   termina o TLS) e a `backend` (`internal: true`, só api + redis). **Não** reaproveita
   o nginx do `agenda2`.
 - Healthcheck do container `api`: TCP na porta `8080` (`python -c "import socket;
-  ..."`), sem tocar no Redis. `GET /health` é o *liveness* (200 sempre) e
-  `GET /health/ready` faz `PING` no Redis, para o proxy/monitoração.
+  ..."`), sem tocar no Redis. `GET /health` é o *liveness* burro — `200` sempre,
+  sem tocar em dependências.
+- *Readiness*: `GET /health/ready` — dá `PING` no Redis (timeout de 2s) e responde
+  `200` com `{"redis": "ok"}` ou `503` com `{"redis": "down"}`. É o endpoint que o
+  proxy/orquestrador consulta antes de mandar tráfego; o healthcheck do container
+  fica fora dele para não derrubar o processo quando só o Redis oscila.
 - Escala horizontal é segura: o estado todo está no Redis e cada update é
   independente. A exceção é a ordem de mensagens de um mesmo chat, que não é garantida
   entre réplicas — aceitável nesta fase (mensagens em rajada são raras em agendamento).

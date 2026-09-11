@@ -36,6 +36,9 @@ class _FakeContainer:
     async def handle_update(self, payload: Mapping[str, Any]) -> None:
         return None
 
+    async def check_readiness(self) -> dict[str, str]:
+        return {"redis": "ok"}
+
 
 @pytest.fixture
 def app(monkeypatch: pytest.MonkeyPatch) -> FastAPI:
@@ -50,6 +53,14 @@ def test_lifespan_expoe_o_container_e_serve_o_health(app: FastAPI) -> None:
     with TestClient(app) as client:
         assert client.get("/health").json() == {"status": "ok"}
         assert app.state.container.webhook_secret == "webhook-secret"
+
+
+def test_ready_usa_o_check_readiness_do_container(app: FastAPI) -> None:
+    with TestClient(app) as client:
+        response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"redis": "ok"}
 
 
 def test_webhook_ligado_ao_container_do_lifespan(app: FastAPI) -> None:

@@ -1,12 +1,18 @@
 """Testes de `TelegramWebhookHandler`: parse -> comando ou agente."""
 
+import io
+import json
+import logging
 from datetime import UTC, datetime
 from typing import Any
+
+import pytest
 
 from src.domain.entities import Channel, Contact, IncomingMessage
 from src.domain.exceptions import ConversationStateError
 from src.infrastructure.telegram.commands import RESET_MESSAGE, WELCOME_MESSAGE
 from src.infrastructure.telegram.webhook_handler import TelegramWebhookHandler
+from src.logging_config import JsonFormatter, _ThreadIdFilter
 from tests.fakes.messenger import FakeMessenger
 
 _CONTACT = Contact(
@@ -120,6 +126,44 @@ async def test_falha_no_reset_responde_ao_cliente_sem_boas_vindas() -> None:
     await handler.handle_update({"update_id": 1})
 
     assert messenger.sent == [(_CONTACT, ConversationStateError.user_message)]
+
+
+@pytest.fixture
+def json_logs() -> io.StringIO:
+    """Captura o `logging` raiz no formato JSON de produção, com o filtro real.
+
+    O `conftest` restaura a config de logging do root depois do teste.
+    """
+    stream = io.StringIO()
+    handler = logging.StreamHandler(stream)
+    handler.setFormatter(JsonFormatter())
+    handler.addFilter(_ThreadIdFilter())
+    root = logging.getLogger()
+    root.handlers[:] = [handler]
+    root.setLevel(logging.DEBUG)
+    return stream
+
+
+async def test_falha_no_turno_loga_thread_id_sem_telefone(json_logs: io.StringIO) -> None:
+    class _Boom:
+        async def execute(self, _message: IncomingMessage) -> None:
+            raise RuntimeError("o agente explodiu")
+
+    handler = TelegramWebhookHandler(
+        parse_update=lambda _payload: _message("quero marcar"),
+        handle_incoming_message=_Boom(),  # type: ignore[arg-type]
+        reset_conversation=_StubReset(),  # type: ignore[arg-type]
+        messenger=FakeMessenger(),
+    )
+
+    await handler.handle_update({"update_id": 1})
+
+    records = [json.loads(line) for line in json_logs.getvalue().splitlines()]
+    assert records, "esperava ao menos um registro"
+    turn_log = next(r for r in records if r["msg"].startswith("Falha ao processar"))
+    assert turn_log["thread_id"] == "telegram:42"
+    # O telefone sintético nunca aparece num log.
+    assert _CONTACT.phone not in json_logs.getvalue()
 
 
 async def test_handle_update_nunca_levanta() -> None:
