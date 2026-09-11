@@ -137,7 +137,12 @@ desfaz.
   na imagem (o `set_webhook` roda no container durante o deploy) e exclui `docs/`,
   `tests/`, caches e `.env`.
 - Um serviço no `docker-compose.yml` + Redis, atrás do mesmo nginx do `agenda2`.
-- Healthcheck: `GET /health`.
+- Healthcheck do container: `GET /health` — *liveness* burro, `200` sempre, sem
+  tocar em dependências.
+- *Readiness*: `GET /health/ready` — dá `PING` no Redis (timeout de 2s) e responde
+  `200` com `{"redis": "ok"}` ou `503` com `{"redis": "down"}`. É o endpoint que o
+  proxy/orquestrador consulta antes de mandar tráfego; o healthcheck do container
+  fica no `/health` para não derrubar o processo quando só o Redis oscila.
 - Escala horizontal é segura: o estado todo está no Redis e cada update é
   independente. A exceção é a ordem de mensagens de um mesmo chat, que não é garantida
   entre réplicas — aceitável nesta fase (mensagens em rajada são raras em agendamento).
