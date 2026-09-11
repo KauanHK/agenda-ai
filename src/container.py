@@ -96,14 +96,16 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
         build_agendabot_client(
             base_url=settings.agendabot.api_url,
             service_key=settings.agendabot.service_key.get_secret_value(),
-            timeout_seconds=settings.http.timeout_seconds,
+            connect_timeout_seconds=settings.http.connect_timeout_seconds,
+            read_timeout_seconds=settings.http.timeout_seconds,
         )
     )
     telegram_client = await stack.enter_async_context(
         build_telegram_client(
             api_root=settings.telegram.api_root,
             bot_token=settings.telegram.bot_token.get_secret_value(),
-            timeout_seconds=settings.http.timeout_seconds,
+            connect_timeout_seconds=settings.http.connect_timeout_seconds,
+            read_timeout_seconds=settings.http.telegram_read_timeout_seconds,
         )
     )
 

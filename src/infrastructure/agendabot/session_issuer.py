@@ -18,8 +18,10 @@ class AgendaBotSessionIssuer:
     status HTTP é traduzida aqui num erro de domínio: nenhum `httpx.HTTPError`
     sobe deste adapter.
 
-    Retry só nos casos idempotentes-seguros — erro de conexão e `5xx` —, com
-    backoff exponencial. Um `4xx` nunca é repetido.
+    Retry só nos casos idempotentes-seguros — falha de conexão, timeout
+    (`connect` / `read` / `write` / `pool`) e `5xx` —, com backoff exponencial.
+    Um `4xx` nunca é repetido. Repetir a emissão é seguro: o AgendaBot resolve o
+    cliente pelo telefone e devolve um token novo, sem duplicar cadastro.
     """
 
     def __init__(
@@ -75,7 +77,9 @@ class AgendaBotSessionIssuer:
         """
         try:
             response = await self._client.post(self._path, json=payload)
-        except httpx.ConnectError as exc:
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            # `TimeoutException` cobre connect/read/write/pool — todos repetíveis
+            # aqui (a emissão é reentrante).
             return exc
         except httpx.HTTPError as exc:
             raise BookingSessionError("Falha de transporte ao emitir a sessão.") from exc

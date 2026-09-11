@@ -84,7 +84,15 @@ class TelegramMessenger:
 - Textos acima de 4096 caracteres são quebrados em pedaços por parágrafo antes do
   envio (`split_for_telegram`, função pura em `formatting.py`).
 - `429` → respeita `retry_after` do corpo e tenta uma vez; outros erros → `DeliveryError`.
+- Timeout: `connect` = `HTTP__CONNECT_TIMEOUT_SECONDS` (5 s), `read`/`write`/`pool` =
+  `HTTP__TELEGRAM_READ_TIMEOUT_SECONDS` (5 s) — a Bot API responde rápido.
+- Retry de transporte **só** em `ConnectError` / `ConnectTimeout` (uma vez): aí o
+  request não saiu e não há risco de mensagem duplicada. Um `ReadTimeout` /
+  `WriteTimeout` — o request pode já ter chegado — vira `DeliveryError` sem repetir.
 - `signal_typing` chama `sendChatAction` com `action=typing` e engole qualquer falha.
+
+Quadro completo da política em
+[`09-configuracao.md`](09-configuracao.md#96-política-de-retry-e-timeout-por-adapter).
 
 ### Formatação
 

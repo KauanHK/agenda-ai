@@ -47,6 +47,9 @@ def test_defaults_valem_quando_so_os_obrigatorios_estao_definidos(
     assert settings.agendabot.service_key.get_secret_value() == "svc-key"
     assert settings.telegram.bot_token.get_secret_value() == "tg-token"
     assert settings.conversation.max_history_messages == 10
+    assert settings.http.timeout_seconds == pytest.approx(10.0)
+    assert settings.http.connect_timeout_seconds == pytest.approx(5.0)
+    assert settings.http.telegram_read_timeout_seconds == pytest.approx(5.0)
 
 
 def test_grupos_leem_o_prefixo_com_delimitador(monkeypatch: pytest.MonkeyPatch) -> None:

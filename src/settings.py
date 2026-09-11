@@ -76,9 +76,18 @@ class IdentitySettings(BaseModel):
 
 
 class HTTPSettings(BaseModel):
-    """Timeouts de HTTP e MCP. Prefixo `HTTP__`."""
+    """Timeouts de HTTP e MCP. Prefixo `HTTP__`.
+
+    `connect_timeout_seconds` é comum aos dois adapters — abrir a conexão TCP+TLS
+    não deveria passar disso. Os tetos de leitura/escrita são separados por
+    adapter: o AgendaBot faz trabalho no backend ao emitir a sessão (`timeout_seconds`,
+    mais folgado); o Telegram responde `sendMessage` rápido ou não responde
+    (`telegram_read_timeout_seconds`, curto). Ver a tabela em `docs/09`.
+    """
 
     timeout_seconds: float = 10.0
+    connect_timeout_seconds: float = 5.0
+    telegram_read_timeout_seconds: float = 5.0
     mcp_timeout_seconds: float = 15.0
 
 

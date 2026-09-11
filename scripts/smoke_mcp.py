@@ -117,7 +117,8 @@ async def _run(args: argparse.Namespace, settings: Settings) -> None:
     async with build_agendabot_client(
         base_url=settings.agendabot.api_url,
         service_key=settings.agendabot.service_key.get_secret_value(),
-        timeout_seconds=settings.http.timeout_seconds,
+        connect_timeout_seconds=settings.http.connect_timeout_seconds,
+        read_timeout_seconds=settings.http.timeout_seconds,
     ) as client:
         issuer = AgendaBotSessionIssuer(
             client,

@@ -45,8 +45,12 @@ confia num token além disso.
 | 409 / 422 | `BookingSessionError` | telefone inválido, corrida na criação |
 | 5xx / timeout | `BookingSessionError` | com retry (abaixo) |
 
-Retry só nos casos idempotentes-seguros (timeout de conexão e 5xx): 2 tentativas,
-backoff exponencial a partir de 200 ms. `4xx` nunca é repetido.
+Retry só nos casos idempotentes-seguros — falha de conexão, timeout
+(`connect` / `read` / `write` / `pool`) e `5xx`: até 3 tentativas, backoff
+exponencial a partir de 200 ms. `4xx` nunca é repetido. Repetir a emissão é
+seguro: o AgendaBot resolve o cliente pelo telefone e não duplica cadastro. O
+`connect` usa `HTTP__CONNECT_TIMEOUT_SECONDS`; o resto, `HTTP__TIMEOUT_SECONDS`.
+Quadro completo em [`09-configuracao.md`](09-configuracao.md#96-política-de-retry-e-timeout-por-adapter).
 
 O `X-Service-Key` só existe dentro de `infrastructure/agendabot/` — nunca é logado,
 nunca entra em mensagem de erro, nunca chega ao LLM.
@@ -84,7 +88,11 @@ Regras:
   é a identidade, e reusar tools de outra sessão agendaria para o cliente errado.
 - O *schema* das tools é cacheável, o *cliente* não. Otimização deixada para depois,
   e só se medir.
-- Timeout total do carregamento: `MCP_TIMEOUT_SECONDS` (default 15 s).
+- Timeout total do carregamento: `HTTP__MCP_TIMEOUT_SECONDS` (default 15 s), via
+  `asyncio.timeout`. **Sem retry**: o handshake do protocolo MCP não é
+  comprovadamente idempotente e o custo de falhar aqui é só uma resposta em
+  linguagem natural. Qualquer falha (timeout, `401`, servidor fora) vira
+  `BookingSessionError`.
 
 ## 5.3 Contrato das tools
 
