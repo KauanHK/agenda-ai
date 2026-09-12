@@ -19,7 +19,9 @@ services:
     logging: *logging
 
   api:
-    image: ghcr.io/${GITHUB_REPOSITORY}:latest
+    # APP_IMAGE em vez de GITHUB_REPOSITORY: o Actions não deixa sobrescrever a
+    # variável padrão (owner com maiúsculas) e o Docker exige o nome em minúsculas.
+    image: ${APP_IMAGE:-ghcr.io/kauanhk/agenda-ai-agent}:latest
     container_name: agente-agenda-api
     restart: unless-stopped
     env_file: ./.env
