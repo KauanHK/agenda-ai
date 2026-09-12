@@ -149,7 +149,7 @@ docker compose up --build
   na imagem e exclui `docs/`, `tests/`, caches, `.env`, os `docker-compose*.yml` e
   `nginx/`.
 - Dois composes: `docker-compose.yml` (produção — só a imagem do GHCR
-  `ghcr.io/${GITHUB_REPOSITORY}:latest`, sem `build`) e `docker-compose.override.yml`
+  `${APP_IMAGE:-ghcr.io/kauanhk/agenda-ai-agent}:latest`, sem `build`) e `docker-compose.override.yml`
   (carregado automático em dev — acrescenta `build`, as portas e uma rede `web` local).
 - Serviços do `docker-compose.yml`: `nginx` (`nginx:1.27-alpine`, `nginx/nginx.conf`
   versionado, encaminha para `api:8080`), `api` e `redis` (`redis:8-alpine`,
