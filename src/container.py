@@ -141,7 +141,7 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
         build_graph(
             build_chat_model(settings.llm),
             checkpointer=checkpointer,
-            history_limit=settings.conversation.max_history_messages,
+            history_limit=settings.conversation.max_history_turns,
         ),
         max_agent_steps=settings.conversation.max_agent_steps,
     )

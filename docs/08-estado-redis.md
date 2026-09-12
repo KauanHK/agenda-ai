@@ -25,13 +25,25 @@ para sempre transforma o Redis em banco.
 ### Poda do histórico
 
 Uma thread longa estoura a janela de contexto e o custo por turno. Antes de chamar o
-modelo, o histórico é limitado a `MAX_HISTORY_MESSAGES` (default 40) pares mais
-recentes:
+modelo, o histórico é limitado aos `MAX_HISTORY_TURNS` (default 10) turnos mais
+recentes — um turno é um `HumanMessage` e tudo que o agente produziu em resposta
+(tool calls, resultados, resposta final):
 
 ```python
 def trim_history(messages: list[AnyMessage], limit: int) -> list[AnyMessage]:
-    """Mantém as últimas mensagens sem quebrar pares de tool call/resultado."""
+    """Mantém os últimos `limit` turnos: cada `HumanMessage` e tudo que vem depois dele."""
 ```
+
+A unidade é o turno, e não a mensagem, porque um único turno com várias consultas
+de agenda gera dez ou mais mensagens; contar mensagens deixaria o modelo ver os
+resultados das tools sem a pergunta que os motivou. Cortar no `HumanMessage`
+também garante que nenhum `AIMessage` que pediu tools fica separado dos seus
+`ToolMessage`.
+
+Pelo mesmo motivo, o "primeiro contato" do contexto do turno só é enviado no
+primeiro turno da thread (`is_first_turn`): a sessão fica em cache e continuaria
+dizendo `is_new_client` em toda mensagem, e o modelo lê isso como ordem de
+cumprimentar de novo.
 
 Função pura, testável isoladamente. A regra que importa: um `AIMessage` com
 `tool_calls` nunca fica sem os `ToolMessage` dele, e um `ToolMessage` nunca aparece sem

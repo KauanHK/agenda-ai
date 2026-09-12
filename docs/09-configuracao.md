@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 | `LLM__OPENAI_API_KEY` | `SecretStr \| None` | `None` | exigida se provider = openai |
 | `LLM__GROQ_API_KEY` | `SecretStr \| None` | `None` | exigida se provider = groq |
 | `CONVERSATION__TTL_MINUTES` | int | `1440` | TTL do histórico |
-| `CONVERSATION__MAX_HISTORY_MESSAGES` | int | `10` | poda do histórico |
+| `CONVERSATION__MAX_HISTORY_TURNS` | int | `10` | poda do histórico, em turnos (mensagem do cliente + tudo que o agente fez em resposta) |
 | `CONVERSATION__MAX_AGENT_STEPS` | int | `8` | teto de ciclos do grafo |
 | `CONVERSATION__MAX_INPUT_CHARS` | int | `1000` | truncamento da mensagem do cliente |
 | `CONVERSATION__SESSION_REFRESH_MARGIN_SECONDS` | int | `60` | margem antes de expirar |
