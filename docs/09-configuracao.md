@@ -137,7 +137,7 @@ Como alternativa, a stack inteira (nginx + api + redis) sobe pelo compose, que e
 desenvolvimento constrói a imagem local e publica a porta `8080` no nginx:
 
 ```bash
-cp .env.example .env      # preencher as chaves; REDIS__URL=redis://redis:6379/1
+cp .env.example .env      # preencher as chaves; REDIS__URL=redis://redis:6379/0
 docker compose up --build
 ```
 
@@ -152,7 +152,7 @@ docker compose up --build
   `ghcr.io/${GITHUB_REPOSITORY}:latest`, sem `build`) e `docker-compose.override.yml`
   (carregado automático em dev — acrescenta `build`, as portas e uma rede `web` local).
 - Serviços do `docker-compose.yml`: `nginx` (`nginx:1.27-alpine`, `nginx/nginx.conf`
-  versionado, encaminha para `api:8080`), `api` e `redis` (`redis:7-alpine`,
+  versionado, encaminha para `api:8080`), `api` e `redis` (`redis:8-alpine`,
   `--appendonly yes`, volume `redisdata`). O `nginx` fica em duas redes: a `web`
   (externa, `docker network create web`, onde o proxy de borda da VPS o alcança e
   termina o TLS) e a `backend` (`internal: true`, só api + redis). **Não** reaproveita

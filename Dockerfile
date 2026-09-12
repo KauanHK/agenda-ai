@@ -11,7 +11,7 @@ WORKDIR /app
 
 # Só o lock e o manifesto: a camada de dependências só invalida quando eles mudam.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --locked --no-dev --extra anthropic
+RUN uv sync --locked --no-dev --extra anthropic --extra openai
 
 # --- runtime: imagem final, não-root --------------------------------------
 FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim AS runtime

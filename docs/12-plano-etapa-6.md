@@ -199,7 +199,7 @@ dois endpoints).
     `depends_on: {redis: {condition: service_healthy}}`, rede `backend`, `healthcheck`
     via `python -c "import socket; socket.create_connection(('127.0.0.1', 8080),
     timeout=3).close()"` (`start_period: 20s`);
-  - `redis`: `redis:7-alpine`, `command: redis-server --appendonly yes`, volume
+  - `redis`: `redis:8-alpine`, `command: redis-server --appendonly yes`, volume
     `redisdata:/data`, `healthcheck: redis-cli ping`, rede `backend`,
     `stop_grace_period: 30s`;
   - `networks`: `backend: {internal: true}`, `web: {external: true, name: web}`;
@@ -214,7 +214,7 @@ dois endpoints).
   (adia a resolução de DNS) e os headers `Host` / `X-Real-IP` / `X-Forwarded-For` /
   `X-Forwarded-Proto`.
 - `.env.example`: acrescenta `GITHUB_REPOSITORY=<owner>/agente-agenda` e uma nota de que
-  no compose `REDIS__URL=redis://redis:6379/1`.
+  no compose `REDIS__URL=redis://redis:6379/0`.
 
 **Pronto quando:** `docker compose up --build` local serve `GET /health` →
 `{"status":"ok"}` e `GET /health/ready` verde com Redis de pé; `docker compose -f
