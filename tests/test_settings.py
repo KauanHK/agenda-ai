@@ -15,6 +15,7 @@ _REQUIRED = {
     "AGENDABOT__ESTABLISHMENT_ID": _ESTABLISHMENT_ID,
     "TELEGRAM__BOT_TOKEN": "tg-token",
     "TELEGRAM__WEBHOOK_SECRET": "hook-secret",
+    "TELEGRAM__ADMIN_TOKEN": "admin-token",
     "REDIS__URL": "redis://localhost:6379/1",
 }
 

@@ -34,5 +34,9 @@ class DeliveryError(AgentError):
     """A resposta não pôde ser entregue ao canal."""
 
 
+class WebhookRegistrationError(AgentError):
+    """O canal recusou registrar ou informar o webhook."""
+
+
 class InvalidPhoneError(AgentError):
     """O telefone do contato não pôde ser determinado."""

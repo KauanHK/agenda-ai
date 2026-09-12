@@ -31,6 +31,7 @@ class Settings(BaseSettings):
 | `AGENDABOT__ESTABLISHMENT_TIMEZONE` | str | `America/Sao_Paulo` | data/hora do prompt |
 | `TELEGRAM__BOT_TOKEN` | `SecretStr` | — | Bot API |
 | `TELEGRAM__WEBHOOK_SECRET` | `SecretStr` | — | path secreto do webhook |
+| `TELEGRAM__ADMIN_TOKEN` | `SecretStr` | — | Bearer das rotas `/admin/telegram/webhook` |
 | `TELEGRAM__API_ROOT` | str | `https://api.telegram.org` | raiz da Bot API (Local Bot API Server / testes) |
 | `REDIS__URL` | str | — | checkpointer + cache |
 | `LLM__PROVIDER` | `Literal["anthropic","openai"]` | `anthropic` | provider |
@@ -129,7 +130,8 @@ curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
 ```
 
 Um script `scripts/set_webhook.py` faz isso lendo o `.env`, e `scripts/delete_webhook.py`
-desfaz.
+desfaz. Com a API de pé, o mesmo registro pode ser feito pela rota administrativa
+(seção 9.7).
 
 Como alternativa, a stack inteira (nginx + api + redis) sobe pelo compose, que em
 desenvolvimento constrói a imagem local e publica a porta `8080` no nginx:
@@ -144,8 +146,8 @@ docker compose up --build
 - `Dockerfile` multi-stage com `uv`, sobre `ghcr.io/astral-sh/uv:python3.14-bookworm-slim`,
   venv resolvido do `uv.lock` (`uv sync --locked --no-dev --extra anthropic`), runtime
   não-root (`appuser`, uid 1000), `EXPOSE 8080`. Um `.dockerignore` mantém `scripts/`
-  na imagem (o `set_webhook` roda no container durante o deploy) e exclui `docs/`,
-  `tests/`, caches, `.env`, os `docker-compose*.yml` e `nginx/`.
+  na imagem e exclui `docs/`, `tests/`, caches, `.env`, os `docker-compose*.yml` e
+  `nginx/`.
 - Dois composes: `docker-compose.yml` (produção — só a imagem do GHCR
   `ghcr.io/${GITHUB_REPOSITORY}:latest`, sem `build`) e `docker-compose.override.yml`
   (carregado automático em dev — acrescenta `build`, as portas e uma rede `web` local).
@@ -168,6 +170,10 @@ docker compose up --build
 - Logs em JSON no stdout, com `thread_id` em todo registro do turno. O telefone
   sintético e o `session_token` **nunca** são logados.
 
+- O deploy **não** registra o webhook do Telegram: o Telegram guarda a URL do lado
+  dele, então o registro é um passo único de *bootstrap* (seção 9.7), refeito só se
+  o domínio ou o `TELEGRAM__WEBHOOK_SECRET` mudarem.
+
 ## 9.6 Política de retry e timeout por adapter
 
 Cada integração de rede tem uma política própria, ditada pela idempotência da
@@ -180,6 +186,7 @@ comportamento de um adapter, atualiza aqui.
 | Tools MCP | `agendabot/tool_provider.py` | — (timeout total) | `HTTP__MCP_TIMEOUT_SECONDS` (15 s), `asyncio.timeout` | **nenhum** — handshake MCP não é comprovadamente idempotente | — | `BookingSessionError` |
 | Envio ao Telegram (`sendMessage`) | `telegram/client.py` | `HTTP__CONNECT_TIMEOUT_SECONDS` (5 s) | `HTTP__TELEGRAM_READ_TIMEOUT_SECONDS` (5 s) | 1 vez **só** em `ConnectError` / `ConnectTimeout`; `429` respeita `retry_after` e tenta 1 vez | falha ao abrir a conexão (request não saiu) | `DeliveryError` |
 | `sendChatAction` (digitando) | `telegram/client.py` | idem | idem | nenhum | — | engolido (log em `debug`) |
+| `setWebhook` / `getWebhookInfo` | `telegram/webhook_registry.py` | idem | idem | nenhum — operação manual, quem chamou repete | — | `WebhookRegistrationError` (`502` na rota `/admin`) |
 | Checkpointer (histórico) | `redis/checkpointer.py` | — | — | nenhum | — | `ConversationStateError` (turno cai de forma visível) |
 | Cache de sessão | `redis/session_cache.py` | — | — | nenhum | — | engolido: `get` → `None`, `put` no-op, log em `warning`; o provider reemite |
 | Grafo do agente | `agent/runner.py` | — | — | `recursion_limit` = `MAX_AGENT_STEPS * 2 + 1` | os ciclos do próprio grafo | `AgentUnavailableError` (também para qualquer falha do LLM) |
@@ -188,3 +195,36 @@ Regra por trás do quadro: só se repete o que é seguramente reentrante. Emitir
 sessão é (o AgendaBot resolve o cliente pelo telefone); `sendMessage` **não** é
 depois que o request parte — repetir ali duplicaria a mensagem, então só um erro
 de conexão (que garante que nada saiu) é repetível.
+
+## 9.7 Rotas administrativas: webhook do Telegram
+
+O Telegram precisa saber para onde mandar os updates (`setWebhook`), e guarda essa
+URL do lado dele. Registrar é, portanto, um passo **único** por ambiente — não faz
+parte do deploy. Depois do primeiro deploy (e sempre que o domínio ou o
+`TELEGRAM__WEBHOOK_SECRET` mudarem), o operador chama a rota administrativa uma vez.
+
+| Rota | Faz |
+| --- | --- |
+| `POST /admin/telegram/webhook` | `setWebhook` em `{base_url}/webhook/telegram/{TELEGRAM__WEBHOOK_SECRET}` (com `secret_token`, `allowed_updates: ["message"]`) e devolve o `getWebhookInfo` resultante |
+| `GET /admin/telegram/webhook` | `getWebhookInfo`, consultado direto do Telegram |
+
+As duas exigem `Authorization: Bearer <TELEGRAM__ADMIN_TOKEN>` (`401` sem ele, com a
+comparação em tempo constante). Nada é persistido pela API: a fonte da verdade é o
+Telegram. O segredo do webhook faz parte da URL registrada e volta mascarado (`***`)
+nas respostas. `base_url` precisa ser HTTPS (`422` caso contrário) e uma recusa do
+Telegram vira `502` com a `description` original.
+
+```bash
+curl -X POST https://agente.exemplo/admin/telegram/webhook \
+  -H "Authorization: Bearer $TELEGRAM_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"base_url": "https://agente.exemplo"}'
+# opcional: "drop_pending_updates": true descarta os updates acumulados na fila
+
+curl https://agente.exemplo/admin/telegram/webhook \
+  -H "Authorization: Bearer $TELEGRAM_ADMIN_TOKEN"
+```
+
+Em desenvolvimento, `scripts/set_webhook.py` faz o mesmo `setWebhook` sem passar pela
+API (usa o mesmo `TelegramWebhookRegistry`), o que serve para túneis efêmeros antes
+de a aplicação subir.

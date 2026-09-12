@@ -246,9 +246,9 @@ docker-compose.yml config` valida a stack de produção sem o override.
       `docker compose up -d --remove-orphans --wait --wait-timeout 180`;
       `docker compose exec -T nginx nginx -t && docker compose exec -T nginx nginx -s reload`;
       limpeza das tags `sha-*` antigas + `docker image prune -f`.
-    - **Registro do webhook:** `docker compose exec -T api python -m scripts.set_webhook
-      "$PUBLIC_BASE_URL"` — idempotente, só surte efeito se a URL mudou. Pode ficar
-      manual no primeiro deploy; se automatizado, `PUBLIC_BASE_URL` vem de secret.
+    - **Registro do webhook:** fora do deploy. O Telegram guarda a URL; o operador
+      chama `POST /admin/telegram/webhook` (Bearer `TELEGRAM__ADMIN_TOKEN`) uma
+      vez após o primeiro deploy — ver `docs/09` §9.7.
 - `rollback.yml`: `workflow_dispatch` com input `motivo`; ssh: exige `$IMAGE:rollback`,
   `docker tag $IMAGE:rollback $IMAGE:latest`, `docker compose up -d --wait`.
 - `docs/09`: descreve secrets e os pré-requisitos manuais na VPS.

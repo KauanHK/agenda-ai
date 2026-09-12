@@ -24,7 +24,11 @@ def _settings() -> Settings:
             "service_key": "service-key",
             "establishment_id": "01a04f5b-0e84-7530-be67-63f08e7b2269",
         },  # type: ignore[arg-type]
-        telegram={"bot_token": "bot-token", "webhook_secret": "webhook-secret"},  # type: ignore[arg-type]
+        telegram={
+            "bot_token": "bot-token",
+            "webhook_secret": "webhook-secret",
+            "admin_token": "admin-token",
+        },  # type: ignore[arg-type]
         redis={"url": "redis://localhost:6379/1"},  # type: ignore[arg-type]
         llm={"anthropic_api_key": "anthropic-key"},  # type: ignore[arg-type]
     )
@@ -32,6 +36,7 @@ def _settings() -> Settings:
 
 class _FakeContainer:
     webhook_secret = "webhook-secret"
+    admin_token = "admin-token"
 
     async def handle_update(self, payload: Mapping[str, Any]) -> None:
         return None
@@ -68,3 +73,8 @@ def test_webhook_ligado_ao_container_do_lifespan(app: FastAPI) -> None:
         response = client.post("/webhook/telegram/webhook-secret", json={"update_id": 1})
 
     assert response.status_code == 200
+
+
+def test_rotas_admin_estao_montadas_e_exigem_o_token(app: FastAPI) -> None:
+    with TestClient(app) as client:
+        assert client.get("/admin/telegram/webhook").status_code == 401
