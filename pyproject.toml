@@ -20,6 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 anthropic = ["langchain-anthropic>=0.3"]
 openai = ["langchain-openai>=0.2"]
+groq = ["langchain-groq>=0.2"]
 
 [dependency-groups]
 dev = [
@@ -54,11 +55,11 @@ strict = true
 plugins = ["pydantic.mypy"]
 files = ["src"]
 
-# O provider openai e um extra opcional (so `--extra anthropic` e sincronizado no
+# Os providers openai e groq sao extras opcionais (so `--extra anthropic` e sincronizado no
 # dev). Faltar o pacote do provider que nao esta em uso nao deve quebrar o type
 # check, do mesmo jeito que nao quebra o boot (o import vive dentro do branch).
 [[tool.mypy.overrides]]
-module = ["langchain_openai.*"]
+module = ["langchain_openai.*", "langchain_groq.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

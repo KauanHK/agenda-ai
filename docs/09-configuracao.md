@@ -34,12 +34,13 @@ class Settings(BaseSettings):
 | `TELEGRAM__ADMIN_TOKEN` | `SecretStr` | — | Bearer das rotas `/admin/telegram/webhook` |
 | `TELEGRAM__API_ROOT` | str | `https://api.telegram.org` | raiz da Bot API (Local Bot API Server / testes) |
 | `REDIS__URL` | str | — | checkpointer + cache |
-| `LLM__PROVIDER` | `Literal["anthropic","openai"]` | `anthropic` | provider |
+| `LLM__PROVIDER` | `Literal["anthropic","openai","groq"]` | `anthropic` | provider |
 | `LLM__MODEL` | str | `claude-sonnet-5` | modelo |
 | `LLM__TEMPERATURE` | float | `0.3` | criatividade baixa: é atendimento |
 | `LLM__MAX_TOKENS` | int | `1024` | resposta de chat é curta |
 | `LLM__ANTHROPIC_API_KEY` | `SecretStr \| None` | `None` | exigida se provider = anthropic |
 | `LLM__OPENAI_API_KEY` | `SecretStr \| None` | `None` | exigida se provider = openai |
+| `LLM__GROQ_API_KEY` | `SecretStr \| None` | `None` | exigida se provider = groq |
 | `CONVERSATION__TTL_MINUTES` | int | `1440` | TTL do histórico |
 | `CONVERSATION__MAX_HISTORY_MESSAGES` | int | `10` | poda do histórico |
 | `CONVERSATION__MAX_AGENT_STEPS` | int | `8` | teto de ciclos do grafo |
@@ -77,6 +78,7 @@ dependencies = [
 [project.optional-dependencies]
 anthropic = ["langchain-anthropic>=0.3"]
 openai = ["langchain-openai>=0.2"]
+groq = ["langchain-groq>=0.2"]
 
 [dependency-groups]
 dev = ["pytest>=8", "pytest-asyncio>=0.24", "respx>=0.21", "fakeredis>=2.26",

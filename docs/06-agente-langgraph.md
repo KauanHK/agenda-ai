@@ -186,6 +186,7 @@ def build_chat_model(settings: Settings) -> BaseChatModel:
 | --- | --- | --- |
 | `anthropic` | `langchain-anthropic` | `claude-sonnet-5` |
 | `openai` | `langchain-openai` | `gpt-4.1` |
+| `groq` | `langchain-groq` | `llama-3.3-70b-versatile` |
 
 Um `match` sobre o provider, um construtor por branch, `ValueError` no default.
 `temperature` e `max_tokens` vêm de settings. Import do pacote dentro do branch, para

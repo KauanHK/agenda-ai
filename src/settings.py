@@ -42,12 +42,13 @@ class TelegramSettings(BaseModel):
 class LLMSettings(BaseModel):
     """Provider e parâmetros do modelo de linguagem. Prefixo `LLM__`."""
 
-    provider: Literal["anthropic", "openai"] = "anthropic"
+    provider: Literal["anthropic", "openai", "groq"] = "anthropic"
     model: str = "claude-sonnet-5"
     temperature: float = 0.3
     max_tokens: int = 1024
     anthropic_api_key: SecretStr | None = None
     openai_api_key: SecretStr | None = None
+    groq_api_key: SecretStr | None = None
 
     @property
     def selected_api_key(self) -> SecretStr | None:
@@ -55,6 +56,7 @@ class LLMSettings(BaseModel):
         return {
             "anthropic": self.anthropic_api_key,
             "openai": self.openai_api_key,
+            "groq": self.groq_api_key,
         }[self.provider]
 
 

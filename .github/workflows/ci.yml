@@ -22,7 +22,7 @@ jobs:
           cache-dependency-glob: uv.lock
 
       - name: Sincroniza o ambiente a partir do lock
-        run: uv sync --locked --extra anthropic
+        run: uv sync --locked --extra anthropic --extra groq
 
       - name: ruff check
         run: uv run ruff check .
