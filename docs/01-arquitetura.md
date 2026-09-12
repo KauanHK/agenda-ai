@@ -91,13 +91,15 @@ agente-agenda/
 │   │   └── telegram/
 │   │       ├── client.py             # sendMessage / sendChatAction
 │   │       ├── update_parser.py      # payload cru → IncomingMessage
-│   │       └── formatting.py         # texto do LLM → MarkdownV2 seguro
+│   │       ├── formatting.py         # texto do LLM → MarkdownV2 seguro
+│   │       └── webhook_registry.py   # setWebhook / getWebhookInfo
 │   │
 │   └── interfaces/
 │       └── http/
 │           ├── app.py                # create_app(): FastAPI + lifespan
 │           ├── dependencies.py       # injeta o container nos endpoints
 │           └── routes/
+│               ├── admin.py          # /admin/telegram/webhook (Bearer)
 │               ├── health.py
 │               └── telegram.py       # POST /webhook/telegram/{secret}
 └── tests/
@@ -115,7 +117,7 @@ agente-agenda/
 | `application.ports` | `domain` + stdlib + `typing` |
 | `application.use_cases` | `domain`, `application.ports` |
 | `infrastructure.*` | `domain`, `application.ports`, libs externas |
-| `interfaces.*` | `application`, `container`, `fastapi` |
+| `interfaces.*` | `domain` (só para traduzir erros em HTTP), `application`, `container`, `fastapi` |
 | `container` | tudo |
 | `logging_config` | só stdlib (importável por qualquer camada) |
 
@@ -130,4 +132,5 @@ falha se a tabela acima for violada.
 | Tool MCP | `tool_provider.py` / nó de tools | devolvido ao LLM como texto, não levanta |
 | Redis fora | `redis/*` | `ConversationStateError` |
 | API do Telegram | `telegram/client.py` | `DeliveryError` |
+| `setWebhook` / `getWebhookInfo` | `telegram/webhook_registry.py` | `WebhookRegistrationError` (→ `502` em `routes/admin.py`) |
 | LLM | `agent/runner.py` | `AgentUnavailableError` |

@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from src.container import build_container
-from src.interfaces.http.routes import health, telegram
+from src.interfaces.http.routes import admin, health, telegram
 from src.logging_config import configure_logging
 from src.settings import Settings
 
@@ -36,4 +36,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="agente-agenda", lifespan=lifespan)
     app.include_router(health.router)
     app.include_router(telegram.router)
+    app.include_router(admin.router)
     return app

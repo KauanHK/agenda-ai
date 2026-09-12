@@ -2,7 +2,8 @@
 
 Lê o `.env` (token do bot e segredo do webhook) e recebe a base pública como
 argumento — em desenvolvimento, a URL de um túnel HTTPS
-(`cloudflared tunnel --url http://localhost:8080`).
+(`cloudflared tunnel --url http://localhost:8080`). Em produção o mesmo
+registro é feito pela rota `POST /admin/telegram/webhook` (ver `docs/09`).
 
 Uso:
 
@@ -16,14 +17,13 @@ O segredo do webhook vai no caminho e também no header
 import argparse
 import asyncio
 import json
-from typing import Any
 
-import httpx
 from pydantic import ValidationError
 
+from src.domain.exceptions import WebhookRegistrationError
+from src.infrastructure.telegram.client import build_telegram_client
+from src.infrastructure.telegram.webhook_registry import TelegramWebhookRegistry
 from src.settings import Settings
-
-_TELEGRAM_API_ROOT = "https://api.telegram.org"
 
 
 def _parse_args() -> argparse.Namespace:
@@ -43,36 +43,28 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _redact(text: str, secret: str) -> str:
-    return text.replace(secret, "***")
-
-
-def _print_result(label: str, response: httpx.Response, secret: str) -> None:
-    print(f"\n{label}: HTTP {response.status_code}")
-    body = json.dumps(response.json(), indent=2, ensure_ascii=False)
-    print(_redact(body, secret))
-
-
-async def _run(args: argparse.Namespace, settings: Settings) -> None:
-    token = settings.telegram.bot_token.get_secret_value()
+async def _run(args: argparse.Namespace, settings: Settings) -> int:
+    client = build_telegram_client(
+        api_root=settings.telegram.api_root,
+        bot_token=settings.telegram.bot_token.get_secret_value(),
+        connect_timeout_seconds=settings.http.connect_timeout_seconds,
+        read_timeout_seconds=settings.http.telegram_read_timeout_seconds,
+    )
     secret = settings.telegram.webhook_secret.get_secret_value()
-    webhook_url = f"{args.base_url.rstrip('/')}/webhook/telegram/{secret}"
-
-    print(f"Webhook  : {_redact(webhook_url, secret)}")
+    registry = TelegramWebhookRegistry(client, webhook_secret=secret)
+    print(f"Webhook  : {registry.webhook_url(args.base_url).replace(secret, '***')}")
     print("Updates  : message")
     print(f"Pendentes: {'descartar' if args.drop_pending else 'manter'}")
 
-    async with httpx.AsyncClient(
-        base_url=f"{_TELEGRAM_API_ROOT}/bot{token}", timeout=httpx.Timeout(10.0)
-    ) as client:
-        payload: dict[str, Any] = {
-            "url": webhook_url,
-            "secret_token": secret,
-            "allowed_updates": ["message"],
-            "drop_pending_updates": args.drop_pending,
-        }
-        _print_result("setWebhook", await client.post("/setWebhook", json=payload), secret)
-        _print_result("getWebhookInfo", await client.get("/getWebhookInfo"), secret)
+    async with client:
+        try:
+            info = await registry.register(args.base_url, drop_pending_updates=args.drop_pending)
+        except WebhookRegistrationError as error:
+            print(f"\nFalhou: {error}")
+            return 1
+    print("\ngetWebhookInfo:")
+    print(json.dumps(info, indent=2, ensure_ascii=False))
+    return 0
 
 
 def main() -> int:
@@ -83,8 +75,7 @@ def main() -> int:
         print("Configuração inválida — preencha o `.env` (veja `.env.example`):\n")
         print(error)
         return 2
-    asyncio.run(_run(args, settings))
-    return 0
+    return asyncio.run(_run(args, settings))
 
 
 if __name__ == "__main__":

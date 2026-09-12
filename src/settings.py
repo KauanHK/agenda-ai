@@ -27,10 +27,15 @@ class AgendaBotSettings(BaseModel):
 
 
 class TelegramSettings(BaseModel):
-    """Credenciais e endpoint do canal Telegram. Prefixo `TELEGRAM__`."""
+    """Credenciais e endpoint do canal Telegram. Prefixo `TELEGRAM__`.
+
+    `admin_token` protege as rotas administrativas (`/admin/telegram/webhook`),
+    que registram e consultam o webhook direto na Bot API.
+    """
 
     bot_token: SecretStr
     webhook_secret: SecretStr
+    admin_token: SecretStr
     api_root: str = "https://api.telegram.org"
 
 

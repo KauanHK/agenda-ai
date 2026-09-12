@@ -37,6 +37,7 @@ from src.infrastructure.redis.session_cache import RedisSessionTokenCache
 from src.infrastructure.telegram.client import TelegramMessenger, build_telegram_client
 from src.infrastructure.telegram.update_parser import parse_update
 from src.infrastructure.telegram.webhook_handler import TelegramWebhookHandler
+from src.infrastructure.telegram.webhook_registry import TelegramWebhookRegistry
 from src.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,12 @@ class Container:
     webhook_secret: str
     check_readiness: Callable[[], Awaitable[dict[str, str]]]
     """Relatório de *readiness*: `{"redis": "ok"}` ou `{"redis": "down"}`."""
+    admin_token: str
+    """Bearer token das rotas `/admin`."""
+    register_webhook: Callable[[str, bool], Awaitable[dict[str, Any]]]
+    """`(base_url, drop_pending_updates)` → `getWebhookInfo` após o `setWebhook`."""
+    get_webhook_info: Callable[[], Awaitable[dict[str, Any]]]
+    """`getWebhookInfo` com o segredo mascarado."""
 
 
 _READINESS_REDIS_TIMEOUT_SECONDS = 2.0
@@ -159,10 +166,17 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
         reset_conversation=reset_conversation,
         messenger=messenger,
     )
+    webhook_secret = settings.telegram.webhook_secret.get_secret_value()
+    webhook_registry = TelegramWebhookRegistry(telegram_client, webhook_secret=webhook_secret)
     logger.info("Dependências montadas (estabelecimento %s)", settings.agendabot.establishment_id)
 
     return Container(
         handle_update=webhook_handler.handle_update,
-        webhook_secret=settings.telegram.webhook_secret.get_secret_value(),
+        webhook_secret=webhook_secret,
         check_readiness=check_readiness,
+        admin_token=settings.telegram.admin_token.get_secret_value(),
+        register_webhook=lambda base_url, drop_pending_updates: webhook_registry.register(
+            base_url, drop_pending_updates=drop_pending_updates
+        ),
+        get_webhook_info=webhook_registry.info,
     )

@@ -9,7 +9,8 @@ a arquitetura proíbe:
 * `application.use_cases` → `domain` + `application.ports`;
 * `infrastructure.*`      → `domain` + `application` + `settings` + libs externas,
   **nunca** `interfaces` nem a *composition root* (`container` / `main`);
-* `interfaces.*`          → `application` + `container` + `settings` + `fastapi` + stdlib;
+* `interfaces.*`          → `domain` + `application` + `container` + `settings` + `fastapi`
+  + stdlib;
 * `container` / `main`    → livre;
 * `logging_config`        → só stdlib; importável por qualquer camada.
 
@@ -101,6 +102,7 @@ _ALLOWED_INTERNAL: dict[str, set[str] | None] = {
     _APPLICATION: {_DOMAIN, _APPLICATION, _PORTS, _USE_CASES},
     _INFRA: {_DOMAIN, _APPLICATION, _PORTS, _USE_CASES, _INFRA, _SETTINGS, _LOGGING},
     _INTERFACES: {
+        _DOMAIN,
         _APPLICATION,
         _PORTS,
         _USE_CASES,

@@ -32,7 +32,9 @@ uv run uvicorn src.main:app --reload --port 8080
 (*liveness*, usado pelo healthcheck do container). `GET /health/ready` é
 *readiness*: dá `PING` no Redis e responde `200` com `{"redis": "ok"}` ou `503`
 com `{"redis": "down"}`. O webhook do Telegram fica em
-`POST /webhook/telegram/{TELEGRAM__WEBHOOK_SECRET}`.
+`POST /webhook/telegram/{TELEGRAM__WEBHOOK_SECRET}`. As rotas administrativas
+`POST`/`GET /admin/telegram/webhook` (Bearer `TELEGRAM__ADMIN_TOKEN`) registram e
+consultam o webhook direto na Bot API — ver `docs/09`.
 
 Para subir a stack completa (nginx + api + redis) via Docker — em dev a imagem é
 construída localmente e o nginx expõe a porta `8080`:
