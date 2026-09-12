@@ -59,7 +59,6 @@ services:
 
 networks:
   backend:
-    internal: true
   web:
     external: true
     name: web

@@ -174,6 +174,48 @@ docker compose up --build
   dele, então o registro é um passo único de *bootstrap* (seção 9.7), refeito só se
   o domínio ou o `TELEGRAM__WEBHOOK_SECRET` mudarem.
 
+### 9.5.1 Pipeline de deploy (GitHub Actions)
+
+`.github/workflows/deploy.yml` roda a cada push na `main` (`concurrency:
+deploy-production`, um deploy por vez):
+
+1. **Build & Push** — `docker/build-push-action` publica a imagem no GHCR como
+   `ghcr.io/<owner>/<repo>:latest` e `:sha-<commit>` (nome em minúsculas — o
+   Docker rejeita `KauanHK`), com cache de camadas no GHA.
+2. **Deploy** — copia `docker-compose.yml` e `nginx/nginx.conf` para
+   `/opt/agente-agenda` na VPS (`scp-action`) e, por SSH: `docker login ghcr.io`,
+   guarda a imagem atual como `:rollback`, faz `pull` da `:sha-<commit>`, retagueia
+   como `:latest`, `docker compose up -d --remove-orphans --wait --wait-timeout 180`,
+   `nginx -t` + `nginx -s reload` (o `nginx.conf` é bind mount, o Compose não recria
+   o container) e limpa as tags `sha-*` antigas.
+
+`.github/workflows/rollback.yml` é `workflow_dispatch` (input `motivo`): exige
+`:rollback` na VPS, retagueia como `:latest` e sobe a stack com `--wait`. Só guarda
+**um** passo atrás — dois rollbacks seguidos não voltam duas versões.
+
+**Secrets do repositório** (Settings → Secrets → Actions):
+
+| Secret | Uso |
+| --- | --- |
+| `VPS_HOST` | host/IP da VPS |
+| `VPS_USER` | usuário SSH (precisa estar no grupo `docker`) |
+| `VPS_SSH_KEY` | chave privada (par cuja pública está no `authorized_keys` do usuário) |
+
+O `GITHUB_TOKEN` padrão basta para publicar e puxar do GHCR (`packages: write` no
+job de build). Se o pacote ficar privado, o `docker login` da VPS usa esse mesmo
+token efêmero a cada deploy.
+
+**Pré-requisitos manuais na VPS** (uma vez):
+
+```bash
+sudo mkdir -p /opt/agente-agenda && sudo chown "$USER" /opt/agente-agenda
+docker network create web            # rede do proxy de borda que termina o TLS
+cp .env.example /opt/agente-agenda/.env   # preencher; REDIS__URL=redis://redis:6379/0
+```
+
+O deploy falha cedo se faltar o `.env` ou a rede `web`. Depois do primeiro deploy
+verde, registrar o webhook uma vez via `POST /admin/telegram/webhook` (seção 9.7).
+
 ## 9.6 Política de retry e timeout por adapter
 
 Cada integração de rede tem uma política própria, ditada pela idempotência da
