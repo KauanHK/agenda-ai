@@ -70,7 +70,7 @@ class ConversationSettings(BaseModel):
     """Limites da conversa e do ciclo do agente. Prefixo `CONVERSATION__`."""
 
     ttl_minutes: int = 1440
-    max_history_messages: int = 10
+    max_history_turns: int = 10
     max_agent_steps: int = 8
     max_input_chars: int = 1000
     session_refresh_margin_seconds: int = 60

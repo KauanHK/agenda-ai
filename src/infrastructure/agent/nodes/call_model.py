@@ -4,7 +4,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AnyMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
-from src.infrastructure.agent.history import trim_history
+from src.infrastructure.agent.history import is_first_turn, trim_history
 from src.infrastructure.agent.prompts import (
     PromptContext,
     render_system_prompt,
@@ -30,12 +30,16 @@ async def call_model(
     mesmo texto para todo turno e serve de prefixo de cache, e o contexto volátil
     do turno (`render_turn_context`), numa segunda `SystemMessage` fora do bloco
     cacheável.
+
+    "Primeiro contato" só vale no primeiro turno da thread: a sessão fica em cache
+    e continuaria dizendo `is_new_client` em toda mensagem, e o modelo lê isso
+    como ordem de cumprimentar de novo.
     """
     turn = load_turn_config(config)
     context = PromptContext(
         client_name=turn["client_name"],
         now=turn["now"],
-        is_new_client=turn["is_new_client"],
+        is_new_client=turn["is_new_client"] and is_first_turn(state["messages"]),
     )
     system = SystemMessage(render_system_prompt())
     turn_context = SystemMessage(render_turn_context(context))

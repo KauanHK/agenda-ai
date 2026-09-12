@@ -56,6 +56,26 @@ class TestCallModel:
         assert "Kauan" in sent[1].content
         assert isinstance(sent[2], HumanMessage)
 
+    async def test_primeiro_contato_so_aparece_no_primeiro_turno(self) -> None:
+        model = FakeChatModel(responses=[AIMessage("ok"), AIMessage("ok")])
+
+        await call_model(
+            _state(HumanMessage("oi")),
+            _config([list_services]),
+            model=model,
+            history_limit=10,
+        )
+        await call_model(
+            _state(HumanMessage("oi"), AIMessage("olá"), HumanMessage("terça")),
+            _config([list_services]),
+            model=model,
+            history_limit=10,
+        )
+
+        first_turn, second_turn = model.received
+        assert "primeiro contato" in first_turn[1].content
+        assert "primeiro contato" not in second_turn[1].content
+
     async def test_vincula_as_tools_do_turno(self) -> None:
         model = FakeChatModel(responses=[AIMessage("ok")])
 
