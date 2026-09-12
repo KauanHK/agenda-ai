@@ -2,6 +2,7 @@
 
 import pytest
 from langchain_anthropic import ChatAnthropic
+from langchain_groq import ChatGroq
 from pydantic import SecretStr
 
 from src.infrastructure.llm.factory import build_chat_model
@@ -21,6 +22,23 @@ def test_provider_anthropic_constroi_chat_anthropic_com_os_parametros() -> None:
 
     assert isinstance(model, ChatAnthropic)
     assert model.model == "claude-sonnet-5"
+    assert model.temperature == pytest.approx(0.3)
+    assert model.max_tokens == 1024
+
+
+def test_provider_groq_constroi_chat_groq_com_os_parametros() -> None:
+    settings = LLMSettings(
+        provider="groq",
+        model="llama-3.3-70b-versatile",
+        temperature=0.3,
+        max_tokens=1024,
+        groq_api_key=SecretStr("gsk-test"),
+    )
+
+    model = build_chat_model(settings)
+
+    assert isinstance(model, ChatGroq)
+    assert model.model_name == "llama-3.3-70b-versatile"
     assert model.temperature == pytest.approx(0.3)
     assert model.max_tokens == 1024
 

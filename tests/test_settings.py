@@ -93,3 +93,22 @@ def test_openai_como_provider_exige_a_openai_key(monkeypatch: pytest.MonkeyPatch
     settings = Settings(_env_file=None)
 
     assert settings.llm.provider == "openai"
+
+
+def test_groq_como_provider_exige_a_groq_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set(monkeypatch, LLM__PROVIDER="groq", LLM__GROQ_API_KEY="gsk-test")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.llm.provider == "groq"
+    assert settings.llm.selected_api_key is not None
+    assert settings.llm.selected_api_key.get_secret_value() == "gsk-test"
+
+
+def test_groq_como_provider_sem_a_groq_key_falha_no_boot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set(monkeypatch, LLM__PROVIDER="groq")  # sem LLM__GROQ_API_KEY
+
+    with pytest.raises(ValidationError, match="LLM__GROQ_API_KEY"):
+        Settings(_env_file=None)

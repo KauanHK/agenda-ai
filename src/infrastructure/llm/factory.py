@@ -64,7 +64,22 @@ def _build_openai(settings: LLMSettings, api_key: SecretStr) -> BaseChatModel:
     return model
 
 
+def _build_groq(settings: LLMSettings, api_key: SecretStr) -> BaseChatModel:
+    """Constrói o chat model do Groq (API compatível com a da OpenAI)."""
+    from langchain_groq import ChatGroq
+
+    # `model` é alias de `model_name` (populate_by_name); o mypy só aceita o nome do campo.
+    model: BaseChatModel = ChatGroq(
+        model_name=settings.model,
+        api_key=api_key,
+        temperature=settings.temperature,
+        max_tokens=settings.max_tokens,
+    )
+    return model
+
+
 _CHAT_MODEL_FACTORIES: dict[str, ChatModelFactory] = {
     "anthropic": _build_anthropic,
     "openai": _build_openai,
+    "groq": _build_groq,
 }
