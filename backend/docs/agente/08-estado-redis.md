@@ -8,7 +8,7 @@ Pacote: `langgraph-checkpoint-redis` (`AsyncRedisSaver`).
 
 - Instanciado **uma vez** no lifespan da aplicação e passado ao
   `graph.compile(checkpointer=...)`.
-- `thread_id` = `ConversationRef.thread_id` = `telegram:{chat_id}`.
+- `thread_id` = `ConversationRef.thread_id` = `telegram:{establishment_id}:{chat_id}`.
 - Índices criados no startup (`await saver.asetup()`).
 
 ### TTL
@@ -54,7 +54,8 @@ requisição.
 
 `app/modules/agent/adapters/redis/session_cache.py`
 
-- Chave: `agente:session:{sha256(phone)}` — o telefone não vai em claro na chave.
+- Chave: `agente:session:{establishment_id}:{sha256(phone)}` — o telefone não vai em
+  claro na chave, e o mesmo telefone em dois estabelecimentos são duas sessões.
 - Valor: JSON com `token`, `client_id`, `client_name`, `expires_at`, `is_new_client`.
 - TTL: `expires_in_minutes - SESSION_REFRESH_MARGIN_SECONDS` (default 60 s de margem),
   no mínimo 1 s. Assim uma entrada cacheada é sempre utilizável quando lida.
