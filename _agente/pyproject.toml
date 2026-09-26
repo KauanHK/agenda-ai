@@ -1,0 +1,70 @@
+[project]
+name = "agente-agenda"
+version = "0.1.0"
+description = "Agente de IA conversacional que atende clientes pelo Telegram e agenda via MCP do AgendaBot"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "httpx>=0.27",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "langgraph>=0.2.50",
+    "langchain-core>=0.3",
+    "langchain-mcp-adapters>=0.1",
+    "langgraph-checkpoint-redis>=0.0.6",
+    "redis>=5.2",
+]
+
+[project.optional-dependencies]
+anthropic = ["langchain-anthropic>=0.3"]
+openai = ["langchain-openai>=0.2"]
+groq = ["langchain-groq>=0.2"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "respx>=0.21",
+    "fakeredis>=2.26",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+src = ["src", "tests"]
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF"]
+# RUF001-003: o codigo e em pt-BR; acentos e travessoes nao sao ambiguidade.
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "tests"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["src"]
+
+# Os providers openai e groq sao extras opcionais (so `--extra anthropic` e sincronizado no
+# dev). Faltar o pacote do provider que nao esta em uso nao deve quebrar o type
+# check, do mesmo jeito que nao quebra o boot (o import vive dentro do branch).
+[[tool.mypy.overrides]]
+module = ["langchain_openai.*", "langchain_groq.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q --strict-markers --strict-config --import-mode=importlib"
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"

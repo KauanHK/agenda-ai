@@ -1,0 +1,132 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+env:
+  DEPLOY_DIR: /opt/agente-agenda
+
+jobs:
+  build:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # O owner do repo tem maiúsculas (KauanHK) e o Docker exige o nome da
+      # imagem em minúsculas, então `ghcr.io/${{ github.repository }}` direto
+      # não serve.
+      - name: Resolve o nome da imagem
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve o nome da imagem
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - name: Envia configuração da stack
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "docker-compose.yml,nginx/nginx.conf"
+          target: ${{ env.DEPLOY_DIR }}
+          overwrite: true
+
+      - uses: appleboy/ssh-action@v1
+        env:
+          IMAGE: ${{ env.IMAGE }}
+          NEW_TAG: sha-${{ github.sha }}
+          DEPLOY_DIR: ${{ env.DEPLOY_DIR }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_ACTOR: ${{ github.actor }}
+          # O docker-compose.yml resolve `${APP_IMAGE}:latest`. Não dá para reusar
+          # GITHUB_REPOSITORY: o Actions ignora tentativas de sobrescrever variáveis
+          # padrão via `env:`, e o valor original tem maiúsculas (KauanHK).
+          APP_IMAGE: ${{ env.IMAGE }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: IMAGE,NEW_TAG,DEPLOY_DIR,GH_TOKEN,GH_ACTOR,APP_IMAGE
+          script: |
+            set -euo pipefail
+            cd "$DEPLOY_DIR"
+
+            if [ ! -f .env ]; then
+              echo "Falta $DEPLOY_DIR/.env — veja .env.example no repo." >&2
+              exit 1
+            fi
+
+            if ! docker network inspect web > /dev/null 2>&1; then
+              echo "Falta a rede externa 'web' — crie com 'docker network create web'." >&2
+              exit 1
+            fi
+
+            echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_ACTOR" --password-stdin
+
+            docker tag "${IMAGE}:latest" "${IMAGE}:rollback" 2>/dev/null || true
+
+            docker pull "${IMAGE}:${NEW_TAG}"
+            docker tag "${IMAGE}:${NEW_TAG}" "${IMAGE}:latest"
+
+            # Sem --force-recreate: o Compose já recria os containers cuja imagem
+            # ou configuração mudou, e recriar o Redis a cada deploy era downtime
+            # à toa. --wait: o deploy só passa se api e redis ficarem healthy.
+            docker compose up -d --remove-orphans --wait --wait-timeout 180
+
+            # O nginx.conf entra por bind mount: o Compose não enxerga mudança de
+            # conteúdo e nunca recria o container, então a config nova só passa a
+            # valer com um reload explícito. Validamos antes — um `nginx -s reload`
+            # sobre config inválida mantém o processo antigo de pé, mas em silêncio,
+            # e o deploy passaria mentindo que aplicou.
+            docker compose exec -T nginx nginx -t
+            docker compose exec -T nginx nginx -s reload
+
+            # Limpeza: descarta as tags sha-* anteriores da NOSSA imagem (as camadas
+            # ainda em uso sobrevivem por :latest/:rollback) e só depois remove o
+            # que ficou órfão. Um `prune -a` global apagaria imagens de outros
+            # stacks parados nesta VPS.
+            docker image ls "$IMAGE" --format '{{.Repository}}:{{.Tag}}' \
+              | grep -E ':sha-' | grep -v ":${NEW_TAG}$" \
+              | xargs -r docker image rm -f > /dev/null 2>&1 || true
+            docker image prune -f > /dev/null
+
+            # O webhook do Telegram NÃO é registrado aqui: é bootstrap único via
+            # POST /admin/telegram/webhook — ver docs/09 §9.7.

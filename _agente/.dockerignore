@@ -1,0 +1,29 @@
+# Git
+.git/
+.github/
+
+# Python / venv
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Caches de ferramentas
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Segredos — o .env.example fica (referência das variáveis)
+.env
+.env.*
+!.env.example
+
+# Não vão para a imagem de runtime
+docs/
+tests/
+*.md
+.vscode/
+docker-compose*.yml
+nginx/
+
+# scripts/ é mantido de propósito: o set_webhook roda dentro do container no deploy.

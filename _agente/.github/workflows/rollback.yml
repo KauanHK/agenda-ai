@@ -1,0 +1,58 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      motivo:
+        description: "Por que está revertendo (fica no log do workflow)"
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  DEPLOY_DIR: /opt/agente-agenda
+
+jobs:
+  rollback:
+    name: Rollback
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Registra o motivo
+        env:
+          MOTIVO: ${{ inputs.motivo }}
+        run: |
+          echo "Rollback solicitado por ${{ github.actor }}: $MOTIVO"
+
+      - name: Resolve o nome da imagem
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - uses: appleboy/ssh-action@v1
+        env:
+          IMAGE: ${{ env.IMAGE }}
+          DEPLOY_DIR: ${{ env.DEPLOY_DIR }}
+          APP_IMAGE: ${{ env.IMAGE }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: IMAGE,DEPLOY_DIR,APP_IMAGE
+          script: |
+            set -euo pipefail
+            cd "$DEPLOY_DIR"
+
+            if ! docker image inspect "${IMAGE}:rollback" > /dev/null 2>&1; then
+              echo "Não existe ${IMAGE}:rollback nesta máquina — nada a reverter." >&2
+              exit 1
+            fi
+
+            docker tag "${IMAGE}:rollback" "${IMAGE}:latest"
+
+            docker compose up -d --remove-orphans --wait --wait-timeout 180
+
+            echo "Rollback aplicado. Imagens no ar:"
+            docker compose images
