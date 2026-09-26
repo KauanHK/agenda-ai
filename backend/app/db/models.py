@@ -1,3 +1,4 @@
+from app.modules.channels.adapters.db.models import TelegramBot
 from app.modules.clients.domain.model import Client
 from app.modules.establishments.domain.model import Establishment
 from app.modules.memberships.domain.model import Membership
@@ -19,6 +20,7 @@ __all__ = [
     "SchedulingNotification",
     "SchedulingStatusLog",
     "Service",
+    "TelegramBot",
     "Unavailability",
     "User",
 ]

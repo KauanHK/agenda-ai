@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from cryptography.fernet import Fernet
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # .env único, na raiz do projeto (backend/app/core/settings.py -> raiz).
@@ -45,6 +47,22 @@ class Settings(BaseSettings):
 
     # Assina os tokens de sessão do cliente no MCP, separado do JWT do painel.
     AGENT_SESSION_SECRET: str
+
+    # Cifra os segredos dos canais (token do bot do Telegram, segredo do webhook).
+    CHANNEL_SECRETS_KEY: str
+
+    @field_validator("CHANNEL_SECRETS_KEY")
+    @classmethod
+    def _validate_channel_secrets_key(cls, value: str) -> str:
+        # Falha no boot, e não na primeira leitura de um bot.
+        try:
+            Fernet(value)
+        except ValueError as exc:
+            raise ValueError(
+                "CHANNEL_SECRETS_KEY não é uma chave Fernet válida "
+                "(32 bytes em base64 url-safe)."
+            ) from exc
+        return value
 
     @property
     def sqlalchemy_database_uri(self) -> str:
