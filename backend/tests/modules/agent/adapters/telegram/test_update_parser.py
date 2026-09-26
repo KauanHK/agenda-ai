@@ -37,8 +37,8 @@ def _update(
 def _parse(payload: dict[str, Any], *, max_chars: int = 1000) -> Any:
     return parse_update(
         payload,
-        FakePhoneResolver("5547999111222"),
-        establishment=_ESTABLISHMENT,
+        _ESTABLISHMENT,
+        phone_resolver=FakePhoneResolver("5547999111222"),
         max_chars=max_chars,
     )
 

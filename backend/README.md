@@ -17,15 +17,16 @@ uv sync --all-extras
 uv run uvicorn app.main_agent:app --reload --port 8002
 
 # conversa com o agente no terminal, sem Telegram
-uv run python -m scripts.agent.repl
-uv run python -m scripts.agent.repl --memory   # sem Redis (checkpointer e cache em memória)
+uv run python -m scripts.agent.repl --establishment-id <uuid>
+uv run python -m scripts.agent.repl --establishment-id <uuid> --memory   # sem Redis
 
 # emite uma sessão e lista as tools do MCP
-uv run python -m scripts.agent.smoke_mcp
-
-# registra/remove o webhook do bot apontando para um túnel HTTPS
-uv run python -m scripts.agent.set_webhook https://<seu-tunel>
-uv run python -m scripts.agent.delete_webhook
+uv run python -m scripts.agent.smoke_mcp --establishment-id <uuid>
 ```
 
-Os scripts rodam contra o ambiente real e não fazem parte da suíte.
+Os scripts rodam contra o ambiente real e não fazem parte da suíte. O estabelecimento
+precisa ter um bot conectado (o fuso vem do diretório de canais).
+
+O webhook de cada bot é registrado pelo backend ao conectar o bot
+(`PUT /api/establishments/{id}/channels/telegram`), em
+`{TELEGRAM_WEBHOOK_BASE_URL}/webhook/telegram/{establishment_id}`.

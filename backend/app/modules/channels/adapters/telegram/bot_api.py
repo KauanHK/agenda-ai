@@ -5,7 +5,7 @@ cada estabelecimento; o `httpx.AsyncClient` só conhece a raiz da Bot API.
 
 Nada sensível sai daqui: os erros são levantados com `from None` (o `__cause__` do
 httpx carrega a URL com o token), a `description` do Telegram volta com o token e o
-segredo trocados por `***`, e o `getWebhookInfo` volta com o segredo mascarado na `url`.
+segredo trocados por `***`.
 """
 
 import logging
@@ -82,19 +82,6 @@ class TelegramBotApi:
             "deleteWebhook",
             json={"drop_pending_updates": drop_pending_updates},
         )
-
-    async def get_webhook_info(self, bot_token: str) -> dict[str, Any]:
-        """`getWebhookInfo` com o último segmento do caminho da `url` mascarado.
-
-        O cliente não sabe qual segredo o webhook usa; no agente de bot único ele é
-        justamente o último segmento (`/webhook/telegram/{segredo}`).
-        """
-        result = await self._call(bot_token, "getWebhookInfo")
-        url = result.get("url")
-        if isinstance(url, str) and url:
-            prefix, _, _ = url.rpartition("/")
-            result["url"] = f"{prefix}/{_REDACTED}"
-        return result
 
     async def _call(
         self,

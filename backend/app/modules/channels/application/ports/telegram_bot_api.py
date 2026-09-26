@@ -1,4 +1,4 @@
-from typing import Any, Protocol
+from typing import Protocol
 
 from app.modules.channels.domain.entities import BotIdentity
 
@@ -20,5 +20,3 @@ class TelegramBotApiProtocol(Protocol):
     async def delete_webhook(
         self, bot_token: str, *, drop_pending_updates: bool
     ) -> None: ...
-
-    async def get_webhook_info(self, bot_token: str) -> dict[str, Any]: ...

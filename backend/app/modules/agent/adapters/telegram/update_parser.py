@@ -22,9 +22,9 @@ _DEFAULT_MAX_CHARS = 1000
 
 def parse_update(
     payload: Mapping[str, Any],
-    phone_resolver: PhoneResolverProtocol,
-    *,
     establishment: Establishment,
+    *,
+    phone_resolver: PhoneResolverProtocol,
     max_chars: int = _DEFAULT_MAX_CHARS,
 ) -> IncomingMessage | None:
     """Traduz o update numa mensagem do domínio, ou devolve `None` se não se aplica.

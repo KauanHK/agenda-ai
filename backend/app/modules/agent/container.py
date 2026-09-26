@@ -4,8 +4,8 @@ Só este módulo (e `main.py`) conhece as classes concretas de infraestrutura;
 ninguém mais instancia adapter. O `AsyncExitStack` devolvido guarda tudo que
 precisa ser fechado no shutdown (pool do banco, clientes HTTP, Redis, saver).
 
-Ordem de construção: banco → Redis → checkpointer → cliente HTTP → sessão → grafo →
-adapters do Telegram → casos de uso → roteador do webhook.
+Ordem de construção: banco → diretório de canais → Redis → checkpointer → cliente
+HTTP → sessão → grafo → adapters do Telegram → casos de uso → roteador do webhook.
 """
 
 import asyncio
@@ -16,12 +16,14 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
-from zoneinfo import ZoneInfo
 
 from redis.exceptions import RedisError
 
 from app.core.db.session import db
 from app.modules.agent.adapters.booking.session_issuer import InProcessSessionIssuer
+from app.modules.agent.adapters.channels.telegram_directory import (
+    DbTelegramChannelDirectory,
+)
 from app.modules.agent.adapters.identity.synthetic_phone import SyntheticPhoneResolver
 from app.modules.agent.adapters.langgraph.graph import build_graph
 from app.modules.agent.adapters.langgraph.runner import LangGraphAgentRunner
@@ -39,6 +41,9 @@ from app.modules.agent.adapters.telegram.client import (
 )
 from app.modules.agent.adapters.telegram.update_parser import parse_update
 from app.modules.agent.adapters.telegram.webhook_handler import TelegramWebhookHandler
+from app.modules.agent.application.ports.channel_directory import (
+    TelegramChannelDirectoryProtocol,
+)
 from app.modules.agent.application.use_cases.handle_incoming_message import (
     HandleIncomingMessage,
 )
@@ -47,36 +52,22 @@ from app.modules.agent.application.use_cases.open_booking_session import (
 )
 from app.modules.agent.application.use_cases.reset_conversation import ResetConversation
 from app.modules.agent.domain.entities import Establishment
-from app.modules.agent.domain.exceptions import WebhookRegistrationError
 from app.modules.agent.settings import Settings
-from app.modules.channels.adapters.telegram.bot_api import (
-    TelegramBotApi,
-    build_bot_api_client,
-)
-from app.modules.channels.domain.exceptions import (
-    InvalidBotTokenError,
-    TelegramApiError,
-)
 
 logger = logging.getLogger(__name__)
-
-WEBHOOK_PATH_TEMPLATE = "/webhook/telegram/{secret}"
 
 
 @dataclass(frozen=True, slots=True)
 class Container:
     """As dependências prontas que a interface HTTP consome."""
 
-    handle_update: Callable[[Mapping[str, Any]], Coroutine[Any, Any, None]]
-    webhook_secret: str
+    handle_update: Callable[
+        [Establishment, Mapping[str, Any]], Coroutine[Any, Any, None]
+    ]
+    channels: TelegramChannelDirectoryProtocol
+    """Qual bot atende cada estabelecimento; o webhook autentica o update por ele."""
     check_readiness: Callable[[], Awaitable[dict[str, str]]]
     """Relatório de *readiness*: `{"redis": "ok"}` ou `{"redis": "down"}`."""
-    admin_token: str
-    """Bearer token das rotas `/admin`."""
-    register_webhook: Callable[[str, bool], Awaitable[dict[str, Any]]]
-    """`(base_url, drop_pending_updates)` → `getWebhookInfo` após o `setWebhook`."""
-    get_webhook_info: Callable[[], Awaitable[dict[str, Any]]]
-    """`getWebhookInfo` com o segredo mascarado."""
 
 
 _READINESS_REDIS_TIMEOUT_SECONDS = 2.0
@@ -99,15 +90,9 @@ def _utc_now() -> datetime:
 
 async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
     """Instancia e liga tudo, registrando no `stack` o que precisa ser fechado."""
-    # O único lugar que ainda sabe que existe um estabelecimento só: todo o resto
-    # recebe o estabelecimento pela mensagem.
-    establishment = Establishment(
-        id=settings.agendabot.establishment_id,
-        timezone=ZoneInfo(settings.agendabot.establishment_timezone),
-    )
-
     db.init()
     stack.push_async_callback(db.close)
+    channels = DbTelegramChannelDirectory()
 
     checkpointer = await stack.enter_async_context(
         open_conversation_checkpointer(
@@ -130,7 +115,6 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
     telegram_client = await stack.enter_async_context(
         build_telegram_client(
             api_root=settings.telegram.api_root,
-            bot_token=settings.telegram.bot_token.get_secret_value(),
             connect_timeout_seconds=settings.http.connect_timeout_seconds,
             read_timeout_seconds=settings.http.telegram_read_timeout_seconds,
         )
@@ -162,7 +146,7 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
         max_agent_steps=settings.conversation.max_agent_steps,
     )
 
-    messenger = TelegramMessenger(telegram_client)
+    messenger = TelegramMessenger(telegram_client, channels)
     handle_incoming_message = HandleIncomingMessage(
         session_provider,
         tool_provider,
@@ -176,53 +160,16 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
         parse_update=functools.partial(
             parse_update,
             phone_resolver=phone_resolver,
-            establishment=establishment,
             max_chars=settings.conversation.max_input_chars,
         ),
         handle_incoming_message=handle_incoming_message,
         reset_conversation=reset_conversation,
         messenger=messenger,
     )
-    webhook_secret = settings.telegram.webhook_secret.get_secret_value()
-    bot_token = settings.telegram.bot_token.get_secret_value()
-    bot_api = TelegramBotApi(
-        await stack.enter_async_context(
-            build_bot_api_client(settings.telegram.api_root)
-        )
-    )
-
-    async def get_webhook_info() -> dict[str, Any]:
-        try:
-            return await bot_api.get_webhook_info(bot_token)
-        except (InvalidBotTokenError, TelegramApiError) as error:
-            raise WebhookRegistrationError(str(error)) from None
-
-    async def register_webhook(
-        base_url: str, drop_pending_updates: bool
-    ) -> dict[str, Any]:
-        try:
-            await bot_api.set_webhook(
-                bot_token,
-                url=webhook_url(base_url, webhook_secret),
-                secret_token=webhook_secret,
-                drop_pending_updates=drop_pending_updates,
-            )
-        except (InvalidBotTokenError, TelegramApiError) as error:
-            raise WebhookRegistrationError(str(error)) from None
-        return await get_webhook_info()
-
-    logger.info("Dependências montadas (estabelecimento %s)", establishment.id)
+    logger.info("Dependências montadas")
 
     return Container(
         handle_update=webhook_handler.handle_update,
-        webhook_secret=webhook_secret,
+        channels=channels,
         check_readiness=check_readiness,
-        admin_token=settings.telegram.admin_token.get_secret_value(),
-        register_webhook=register_webhook,
-        get_webhook_info=get_webhook_info,
     )
-
-
-def webhook_url(base_url: str, webhook_secret: str) -> str:
-    """URL completa do webhook a partir da base pública (sem barra dupla)."""
-    return base_url.rstrip("/") + WEBHOOK_PATH_TEMPLATE.format(secret=webhook_secret)
