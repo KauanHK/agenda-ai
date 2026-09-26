@@ -4,6 +4,9 @@ import io
 import json
 import logging
 
+import httpx
+import pytest
+
 from src.logging_config import (
     JsonFormatter,
     _ThreadIdFilter,
@@ -103,3 +106,19 @@ def test_configure_logging_e_idempotente() -> None:
     root = logging.getLogger()
     assert len(root.handlers) == 1
     assert root.level == logging.DEBUG
+
+
+def test_configure_logging_nao_loga_a_url_com_o_token_do_bot(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    configure_logging("DEBUG")
+    # `force=True` tirou o handler do caplog do root; recoloca.
+    logging.getLogger().addHandler(caplog.handler)
+
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={"ok": True}))
+    with httpx.Client(transport=transport) as client:
+        client.post("https://api.telegram.org/bot123:SECRET/sendMessage")
+    logging.getLogger("src.app").info("log da aplicação")
+
+    assert not any("SECRET" in record.getMessage() for record in caplog.records)
+    assert any(record.getMessage() == "log da aplicação" for record in caplog.records)
