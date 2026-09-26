@@ -102,7 +102,7 @@ class SchedulingsReader:
             total = await logs_repo.count_by_scheduling(scheduling_id)
 
             return build_paginated_response(
-                items=[SchedulingStatusLogRead.model_validate(l) for l in logs],
+                items=[SchedulingStatusLogRead.model_validate(log) for log in logs],
                 total=total,
                 params=pagination,
             )

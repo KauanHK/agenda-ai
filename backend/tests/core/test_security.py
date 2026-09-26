@@ -1,3 +1,4 @@
+import dataclasses
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -138,12 +139,12 @@ def test_decode_token_valid(identity):
 
 
 def test_decode_token_expired_raises_unauthorized(expired_token):
-    with pytest.raises(UnauthorizedError, match="Token expired."):
+    with pytest.raises(UnauthorizedError, match=r"Token expired\."):
         decode_token(expired_token)
 
 
 def test_decode_token_invalid_string_raises_unauthorized():
-    with pytest.raises(UnauthorizedError, match="Invalid token."):
+    with pytest.raises(UnauthorizedError, match=r"Invalid token\."):
         decode_token("token.invalido.aqui")
 
 
@@ -158,7 +159,7 @@ def test_decode_token_wrong_secret(identity):
         claims, "wrong-secret", algorithm=settings.JWT_ALGORITHM
     )
 
-    with pytest.raises(UnauthorizedError, match="Invalid token."):
+    with pytest.raises(UnauthorizedError, match=r"Invalid token\."):
         decode_token(token_wrong_secret)
 
 
@@ -173,7 +174,7 @@ def test_decode_token_tampered_payload(identity):
 
 def test_token_identity_is_frozen():
     identity = TokenIdentity(subject=uuid.uuid4())
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         identity.subject = uuid.uuid4()  # type: ignore
 
 
@@ -199,12 +200,12 @@ def test_decode_access_token_rejects_refresh_type(identity):
 
 
 def test_decode_access_token_expired_raises_unauthorized(expired_token):
-    with pytest.raises(UnauthorizedError, match="Token expired."):
+    with pytest.raises(UnauthorizedError, match=r"Token expired\."):
         decode_access_token(expired_token)
 
 
 def test_decode_access_token_invalid_string_raises_unauthorized():
-    with pytest.raises(UnauthorizedError, match="Invalid token."):
+    with pytest.raises(UnauthorizedError, match=r"Invalid token\."):
         decode_access_token("token.invalido.aqui")
 
 
@@ -223,10 +224,10 @@ def test_decode_refresh_token_rejects_access_type(identity):
 
 
 def test_decode_refresh_token_expired_raises_unauthorized(expired_token):
-    with pytest.raises(UnauthorizedError, match="Token expired."):
+    with pytest.raises(UnauthorizedError, match=r"Token expired\."):
         decode_refresh_token(expired_token)
 
 
 def test_decode_refresh_token_invalid_string_raises_unauthorized():
-    with pytest.raises(UnauthorizedError, match="Invalid token."):
+    with pytest.raises(UnauthorizedError, match=r"Invalid token\."):
         decode_refresh_token("token.invalido.aqui")

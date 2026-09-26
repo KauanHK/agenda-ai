@@ -118,7 +118,7 @@ async def test_close_allows_reinit(initialized_database: DataBase):
 
 
 async def test_get_session_raises_if_not_initialized(database: DataBase):
-    with pytest.raises(RuntimeError, match="Database engine not initialized."):
+    with pytest.raises(RuntimeError, match=r"Database engine not initialized\."):
         async for _ in database.session_context():
             pass
 

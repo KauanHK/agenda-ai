@@ -1,1 +1,1 @@
-from app.worker import notifications  # noqa: F401
+from app.worker import notifications
