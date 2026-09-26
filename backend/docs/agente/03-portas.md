@@ -89,6 +89,26 @@ class AgentRunnerProtocol(Protocol):
 vem do histórico: nome do cliente, data/hora atual no fuso do estabelecimento, e se é
 um cliente novo.
 
+## `TelegramChannelDirectoryProtocol`
+
+```python
+class TelegramChannelDirectoryProtocol(Protocol):
+    async def get(self, establishment_id: uuid.UUID) -> TelegramChannel | None:
+        """
+        Devolve o bot que atende o estabelecimento, ou `None` se ele não atende.
+
+        Raises:
+            ChannelLookupError: Se não foi possível consultar.
+        """
+```
+
+`None` cobre estabelecimento sem bot conectado, inexistente, inativo ou excluído. O
+`TelegramChannel` traz o `Establishment` (id e fuso), o token e o segredo do webhook,
+esses dois fora do `repr`.
+
+O adapter (`DbTelegramChannelDirectory`) consulta o banco a cada chamada, sem cache:
+com cache, reconectar ou desconectar o bot só valeria depois do TTL.
+
 ## `OutboundMessengerProtocol`
 
 ```python

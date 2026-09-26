@@ -5,7 +5,7 @@ dependência externa. Tudo imutável (`frozen=True`).
 """
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from zoneinfo import ZoneInfo
@@ -24,6 +24,16 @@ class Establishment:
     id: uuid.UUID
     timezone: ZoneInfo
     """Fuso em que o cliente fala de "amanhã" e "sexta"."""
+
+
+@dataclass(frozen=True, slots=True)
+class TelegramChannel:
+    """O bot do Telegram que atende um estabelecimento."""
+
+    establishment: Establishment
+    bot_token: str = field(repr=False)
+    webhook_secret: str = field(repr=False)
+    """Quem tem o segredo forja updates; nenhum dos dois pode aparecer em log."""
 
 
 @dataclass(frozen=True, slots=True)
