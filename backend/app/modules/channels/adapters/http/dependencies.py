@@ -13,6 +13,9 @@ from app.modules.channels.adapters.telegram.bot_api import (
 from app.modules.channels.application.use_cases.connect_telegram import (
     TelegramBotConnector,
 )
+from app.modules.channels.application.use_cases.disconnect_telegram import (
+    TelegramBotDisconnector,
+)
 from app.modules.channels.application.use_cases.read_telegram import (
     TelegramBotReader,
 )
@@ -41,7 +44,17 @@ def get_telegram_bot_connector(
     )
 
 
+def get_telegram_bot_disconnector(
+    uow: ChannelsUnitOfWorkDep,
+    bot_api: Annotated[TelegramBotApi, Depends(get_bot_api)],
+) -> TelegramBotDisconnector:
+    return TelegramBotDisconnector(uow=uow, bot_api=bot_api)
+
+
 TelegramBotReaderDep = Annotated[TelegramBotReader, Depends(get_telegram_bot_reader)]
 TelegramBotConnectorDep = Annotated[
     TelegramBotConnector, Depends(get_telegram_bot_connector)
+]
+TelegramBotDisconnectorDep = Annotated[
+    TelegramBotDisconnector, Depends(get_telegram_bot_disconnector)
 ]

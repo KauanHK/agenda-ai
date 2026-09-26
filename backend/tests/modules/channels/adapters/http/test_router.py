@@ -165,3 +165,43 @@ def test_put_forbidden(client, url, actor, establishment_id, role):
     response = client.put(url, json={"bot_token": TOKEN})
 
     assert response.status_code == 403
+
+
+def test_delete_disconnects(client, uow, url, establishment_id):
+    uow.telegram_bots.get_by_establishment.return_value = make_telegram_bot(
+        establishment_id
+    )
+
+    response = client.delete(url)
+
+    assert response.status_code == 204
+    uow.telegram_bots.delete.assert_awaited_once_with(establishment_id)
+
+
+def test_delete_without_bot(client, bot_api, url):
+    response = client.delete(url)
+
+    assert response.status_code == 404
+    bot_api.delete_webhook.assert_not_awaited()
+
+
+def test_delete_telegram_unavailable(client, uow, bot_api, url, establishment_id):
+    uow.telegram_bots.get_by_establishment.return_value = make_telegram_bot(
+        establishment_id
+    )
+    bot_api.delete_webhook.side_effect = TelegramApiError("falhou")
+
+    response = client.delete(url)
+
+    assert response.status_code == 502
+    uow.telegram_bots.delete.assert_not_awaited()
+
+
+def test_delete_forbidden(client, url, establishment_id):
+    client.app.dependency_overrides[get_current_actor] = lambda: make_actor(
+        establishment_id, UserRole.MEMBER
+    )
+
+    response = client.delete(url)
+
+    assert response.status_code == 403

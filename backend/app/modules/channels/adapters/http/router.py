@@ -6,6 +6,7 @@ from app.api.deps.auth import ActorDep
 from app.core.exceptions import ExternalServiceError, ValidationAppError
 from app.modules.channels.adapters.http.dependencies import (
     TelegramBotConnectorDep,
+    TelegramBotDisconnectorDep,
     TelegramBotReaderDep,
 )
 from app.modules.channels.adapters.http.schemas import (
@@ -50,3 +51,17 @@ async def connect_telegram_channel(
             "Não foi possível falar com o Telegram. Tente novamente."
         ) from exc
     return TelegramChannelRead.from_bot(bot)
+
+
+@router.delete("", status_code=204)
+async def disconnect_telegram_channel(
+    establishment_id: uuid.UUID,
+    disconnector: TelegramBotDisconnectorDep,
+    actor: ActorDep,
+) -> None:
+    try:
+        await disconnector.disconnect(actor, establishment_id)
+    except TelegramApiError as exc:
+        raise ExternalServiceError(
+            "Não foi possível falar com o Telegram. Tente novamente."
+        ) from exc
