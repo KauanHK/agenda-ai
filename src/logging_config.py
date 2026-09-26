@@ -107,3 +107,7 @@ def configure_logging(level: str) -> None:
     handler.setFormatter(JsonFormatter())
     handler.addFilter(_ThreadIdFilter())
     logging.basicConfig(level=level.upper(), handlers=[handler], force=True)
+    # O `httpx` loga em INFO a URL de cada requisição, e a da Bot API carrega o token
+    # do bot no caminho (`/bot<token>/...`). Fica em WARNING seja qual for o `level`.
+    for name in ("httpx", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
