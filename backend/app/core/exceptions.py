@@ -47,3 +47,9 @@ class ValidationAppError(AppError):
     status_code = 422
     code = "validation_error"
     message = "Validation error."
+
+
+class ExternalServiceError(AppError):
+    status_code = 502
+    code = "external_service_error"
+    message = "An external service failed to respond."

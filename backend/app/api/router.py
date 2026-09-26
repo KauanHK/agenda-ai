@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps.auth import get_current_establishment_actor
 from app.modules.auth.api.router import router as auth_router
+from app.modules.channels.adapters.http.router import router as channels_router
 from app.modules.clients.api.router import router as clients_router
 from app.modules.dashboard.api.router import router as dashboard_router
 from app.modules.establishments.api.router import router as establishments_router
@@ -68,6 +69,9 @@ def build_establishment_router() -> APIRouter:
     )
 
     router.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])
+    router.include_router(
+        channels_router, prefix="/channels/telegram", tags=["Channels"]
+    )
     return router
 
 
