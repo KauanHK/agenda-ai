@@ -1,5 +1,6 @@
 """Testes de `LangGraphAgentRunner`: extração da resposta, contagem e erros."""
 
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,7 +19,8 @@ from app.modules.agent.domain.exceptions import (
 )
 from tests.modules.agent.fakes.chat_model import FakeChatModel
 
-_REF = ConversationRef(Channel.TELEGRAM, "999")
+_ESTABLISHMENT_ID = uuid.UUID("01a04f64-0000-7000-8000-00000000e001")
+_REF = ConversationRef(Channel.TELEGRAM, _ESTABLISHMENT_ID, "999")
 
 
 def _context() -> AgentContext:

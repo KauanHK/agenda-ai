@@ -25,7 +25,13 @@ POST /webhook/telegram/{secret_path}
 `app/modules/agent/adapters/telegram/update_parser.py`
 
 ```python
-def parse_update(payload: dict[str, Any], phone_resolver: PhoneResolverProtocol) -> IncomingMessage | None:
+def parse_update(
+    payload: Mapping[str, Any],
+    phone_resolver: PhoneResolverProtocol,
+    *,
+    establishment: Establishment,
+    max_chars: int = 1000,
+) -> IncomingMessage | None:
     """
     Converte um update do Telegram numa mensagem do domínio.
 
@@ -36,6 +42,11 @@ def parse_update(payload: dict[str, Any], phone_resolver: PhoneResolverProtocol)
 
 `None` é a resposta correta, não um erro: o Telegram manda muitos tipos de update e
 ignorar em silêncio é o comportamento esperado.
+
+A mensagem sai com o `establishment` recebido. Por enquanto o container fixa no
+`parse_update` (via `functools.partial`) o único estabelecimento do env
+(`AGENT_AGENDABOT__ESTABLISHMENT_ID` e `_ESTABLISHMENT_TIMEZONE`); é o único lugar que
+ainda sabe que existe um estabelecimento só.
 
 Campos usados:
 
@@ -76,11 +87,12 @@ custa uma chamada de modelo à toa.
 class TelegramMessenger:
     """Implementa `OutboundMessengerProtocol` sobre a Bot API."""
 
-    async def send_text(self, contact: Contact, text: str) -> None: ...
-    async def signal_typing(self, contact: Contact) -> None: ...
+    async def send_text(self, conversation: ConversationRef, text: str) -> None: ...
+    async def signal_typing(self, conversation: ConversationRef) -> None: ...
 ```
 
-- `sendMessage` com `chat_id` = `contact.channel_user_id`.
+- `sendMessage` com `chat_id` = `conversation.channel_user_id`. Por enquanto há um bot
+  só; o `establishment_id` da conversa é o que vai escolher o bot.
 - Textos acima de 4096 caracteres são quebrados em pedaços por parágrafo antes do
   envio (`split_for_telegram`, função pura em `formatting.py`).
 - `429` → respeita `retry_after` do corpo e tenta uma vez; outros erros → `DeliveryError`.

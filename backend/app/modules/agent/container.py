@@ -47,6 +47,7 @@ from app.modules.agent.application.use_cases.open_booking_session import (
     BookingSessionProvider,
 )
 from app.modules.agent.application.use_cases.reset_conversation import ResetConversation
+from app.modules.agent.domain.entities import Establishment
 from app.modules.agent.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -88,7 +89,12 @@ def _utc_now() -> datetime:
 
 async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
     """Instancia e liga tudo, registrando no `stack` o que precisa ser fechado."""
-    establishment_tz = ZoneInfo(settings.agendabot.establishment_timezone)
+    # O único lugar que ainda sabe que existe um estabelecimento só: todo o resto
+    # recebe o estabelecimento pela mensagem.
+    establishment = Establishment(
+        id=settings.agendabot.establishment_id,
+        timezone=ZoneInfo(settings.agendabot.establishment_timezone),
+    )
 
     db.init()
     stack.push_async_callback(db.close)
@@ -123,10 +129,7 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
     phone_resolver = SyntheticPhoneResolver(settings.identity.synthetic_phone_prefix)
     session_provider = BookingSessionProvider(
         phone_resolver=phone_resolver,
-        issuer=InProcessSessionIssuer(
-            establishment_id=settings.agendabot.establishment_id,
-            clock=_utc_now,
-        ),
+        issuer=InProcessSessionIssuer(clock=_utc_now),
         cache=RedisSessionTokenCache(
             redis_client,
             clock=_utc_now,
@@ -155,7 +158,7 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
         tool_provider,
         runner,
         messenger,
-        clock=lambda: datetime.now(establishment_tz),
+        clock=_utc_now,
     )
     reset_conversation = ResetConversation(CheckpointerConversationHistory(checkpointer))
 
@@ -163,6 +166,7 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
         parse_update=functools.partial(
             parse_update,
             phone_resolver=phone_resolver,
+            establishment=establishment,
             max_chars=settings.conversation.max_input_chars,
         ),
         handle_incoming_message=handle_incoming_message,
@@ -171,7 +175,7 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
     )
     webhook_secret = settings.telegram.webhook_secret.get_secret_value()
     webhook_registry = TelegramWebhookRegistry(telegram_client, webhook_secret=webhook_secret)
-    logger.info("Dependências montadas (estabelecimento %s)", settings.agendabot.establishment_id)
+    logger.info("Dependências montadas (estabelecimento %s)", establishment.id)
 
     return Container(
         handle_update=webhook_handler.handle_update,

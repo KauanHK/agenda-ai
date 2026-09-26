@@ -72,10 +72,7 @@ class TelegramWebhookHandler:
             message = self._parse_update(payload)
             if message is None:
                 return None
-            ref = ConversationRef(
-                channel=message.contact.channel,
-                channel_user_id=message.contact.channel_user_id,
-            )
+            ref = message.conversation
         except Exception:
             logger.exception(_FAILURE_MSG)
             return None
@@ -95,7 +92,7 @@ class TelegramWebhookHandler:
         try:
             await self._reset_conversation.execute(ref)
         except AgentError as error:
-            await self._messenger.send_text(message.contact, error.user_message)
+            await self._messenger.send_text(ref, error.user_message)
             return
         reply = WELCOME_MESSAGE if command == "start" else RESET_MESSAGE
-        await self._messenger.send_text(message.contact, reply)
+        await self._messenger.send_text(ref, reply)

@@ -3,14 +3,22 @@
 import io
 import json
 import logging
+import uuid
 from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from app.modules.agent.adapters.telegram.commands import RESET_MESSAGE, WELCOME_MESSAGE
 from app.modules.agent.adapters.telegram.webhook_handler import TelegramWebhookHandler
-from app.modules.agent.domain.entities import Channel, Contact, IncomingMessage
+from app.modules.agent.domain.entities import (
+    Channel,
+    Contact,
+    ConversationRef,
+    Establishment,
+    IncomingMessage,
+)
 from app.modules.agent.domain.exceptions import ConversationStateError
 from app.modules.agent.logging_config import JsonFormatter, _ThreadIdFilter
 from tests.modules.agent.fakes.messenger import FakeMessenger
@@ -21,10 +29,16 @@ _CONTACT = Contact(
     display_name="Kauan",
     phone="5547999111222",
 )
+_ESTABLISHMENT = Establishment(
+    id=uuid.UUID("01a04f64-0000-7000-8000-00000000e001"),
+    timezone=ZoneInfo("America/Sao_Paulo"),
+)
+_REF = ConversationRef(Channel.TELEGRAM, _ESTABLISHMENT.id, "42")
 
 
 def _message(text: str) -> IncomingMessage:
     return IncomingMessage(
+        establishment=_ESTABLISHMENT,
         contact=_CONTACT,
         text=text,
         channel_message_id="1",
@@ -86,8 +100,8 @@ async def test_start_reseta_e_manda_boas_vindas() -> None:
     await handler.handle_update({"update_id": 1})
 
     assert len(reset.calls) == 1
-    assert reset.calls[0].thread_id == "telegram:42"
-    assert messenger.sent == [(_CONTACT, WELCOME_MESSAGE)]
+    assert reset.calls == [_REF]
+    assert messenger.sent == [(_REF, WELCOME_MESSAGE)]
     assert incoming.handled == []
 
 
@@ -97,7 +111,7 @@ async def test_reset_reseta_e_confirma() -> None:
     await handler.handle_update({"update_id": 1})
 
     assert len(reset.calls) == 1
-    assert messenger.sent == [(_CONTACT, RESET_MESSAGE)]
+    assert messenger.sent == [(_REF, RESET_MESSAGE)]
 
 
 async def test_comando_desconhecido_vai_para_o_agente() -> None:
@@ -125,7 +139,7 @@ async def test_falha_no_reset_responde_ao_cliente_sem_boas_vindas() -> None:
 
     await handler.handle_update({"update_id": 1})
 
-    assert messenger.sent == [(_CONTACT, ConversationStateError.user_message)]
+    assert messenger.sent == [(_REF, ConversationStateError.user_message)]
 
 
 @pytest.fixture
@@ -161,7 +175,7 @@ async def test_falha_no_turno_loga_thread_id_sem_telefone(json_logs: io.StringIO
     records = [json.loads(line) for line in json_logs.getvalue().splitlines()]
     assert records, "esperava ao menos um registro"
     turn_log = next(r for r in records if r["msg"].startswith("Falha ao processar"))
-    assert turn_log["thread_id"] == "telegram:42"
+    assert turn_log["thread_id"] == _REF.thread_id
     # O telefone sintético nunca aparece num log.
     assert _CONTACT.phone not in json_logs.getvalue()
 

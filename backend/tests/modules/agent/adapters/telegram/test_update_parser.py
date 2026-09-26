@@ -1,14 +1,20 @@
 """Testes de `parse_update`: o que vira `IncomingMessage` e o que vira `None`."""
 
+import uuid
 from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.modules.agent.adapters.telegram.update_parser import parse_update
-from app.modules.agent.domain.entities import Channel
+from app.modules.agent.domain.entities import Channel, Establishment
 from tests.modules.agent.fakes.phone_resolver import FakePhoneResolver
 
 _SENDER = {"id": 123456, "is_bot": False, "first_name": "Kauan", "last_name": "Kaestner"}
 _CHAT = {"id": 123456, "type": "private"}
+_ESTABLISHMENT = Establishment(
+    id=uuid.UUID("01a04f64-0000-7000-8000-00000000e001"),
+    timezone=ZoneInfo("America/Sao_Paulo"),
+)
 
 
 def _update(
@@ -29,13 +35,19 @@ def _update(
 
 
 def _parse(payload: dict[str, Any], *, max_chars: int = 1000) -> Any:
-    return parse_update(payload, FakePhoneResolver("5547999111222"), max_chars=max_chars)
+    return parse_update(
+        payload,
+        FakePhoneResolver("5547999111222"),
+        establishment=_ESTABLISHMENT,
+        max_chars=max_chars,
+    )
 
 
 def test_mensagem_de_texto_privada_vira_incoming_message() -> None:
     result = _parse(_update())
 
     assert result is not None
+    assert result.establishment == _ESTABLISHMENT
     assert result.contact.channel is Channel.TELEGRAM
     assert result.contact.channel_user_id == "123456"
     assert result.contact.display_name == "Kauan Kaestner"

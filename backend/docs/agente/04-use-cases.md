@@ -31,9 +31,10 @@ class HandleIncomingMessage:
 Sequência:
 
 1. `signal_typing` no canal.
-2. `session_provider.for_contact(message.contact)` → `BookingSession`.
+2. `session_provider.for_contact(message.contact, message.establishment.id)` → `BookingSession`.
 3. `tool_provider.tools_for(session.token)` → tools.
-4. `agent.run(...)` → `AgentAnswer`.
+4. `agent.run(...)` → `AgentAnswer`. O "agora" do contexto é o relógio (UTC)
+   convertido para `message.establishment.timezone`.
 5. `messenger.send_text(...)`.
 
 O passo 1 não bloqueia o resto: se falhar, é ignorado.
@@ -46,7 +47,7 @@ try:
 except AgentError as error:
     answer_text = error.user_message
     logger.warning("Turno falhou para %s: %s", ref, error)
-await self._messenger.send_text(message.contact, answer_text)
+await self._messenger.send_text(message.conversation, answer_text)
 ```
 
 `_produce_answer` é privado e concentra os passos 2–4. `execute` fica com uma única
@@ -71,8 +72,8 @@ class BookingSessionProvider:
         refresh_margin_seconds: int,          # SESSION_REFRESH_MARGIN_SECONDS
     ) -> None: ...
 
-    async def for_contact(self, contact: Contact) -> BookingSession:
-        """Devolve uma sessão válida para o contato, reaproveitando o cache."""
+    async def for_contact(self, contact: Contact, establishment_id: uuid.UUID) -> BookingSession:
+        """Devolve uma sessão válida para o contato no estabelecimento, reaproveitando o cache."""
 ```
 
 - O telefone vem do `phone_resolver` (o `Contact` já o carrega; quem monta o `Contact`

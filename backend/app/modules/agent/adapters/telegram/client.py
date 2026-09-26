@@ -15,7 +15,7 @@ from app.modules.agent.adapters.telegram.formatting import (
     split_for_telegram,
     to_telegram_text,
 )
-from app.modules.agent.domain.entities import Contact
+from app.modules.agent.domain.entities import ConversationRef
 from app.modules.agent.domain.exceptions import DeliveryError
 
 logger = logging.getLogger(__name__)
@@ -64,18 +64,18 @@ class TelegramMessenger:
         self._client = client
         self._connect_retry_delay_seconds = connect_retry_delay_seconds
 
-    async def send_text(self, contact: Contact, text: str) -> None:
+    async def send_text(self, conversation: ConversationRef, text: str) -> None:
         """Normaliza o texto, quebra no teto de 4096 e envia pedaço a pedaço."""
         for chunk in split_for_telegram(to_telegram_text(text)):
-            await self._send_message(contact.channel_user_id, chunk)
+            await self._send_message(conversation.channel_user_id, chunk)
 
-    async def signal_typing(self, contact: Contact) -> None:
+    async def signal_typing(self, conversation: ConversationRef) -> None:
         """Chama `sendChatAction` e engole qualquer falha."""
         try:
             await self._client.post(
                 "/sendChatAction",
                 json={
-                    "chat_id": contact.channel_user_id,
+                    "chat_id": conversation.channel_user_id,
                     "action": "typing",
                 },
             )

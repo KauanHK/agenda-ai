@@ -23,9 +23,11 @@ assinatura por `async def`.
 
 ```python
 class BookingSessionIssuerProtocol(Protocol):
-    async def issue(self, phone: str, name: str | None) -> BookingSession:
+    async def issue(
+        self, establishment_id: uuid.UUID, phone: str, name: str | None
+    ) -> BookingSession:
         """
-        Troca o telefone por uma sessão autenticada no AgendaBot.
+        Troca o telefone por uma sessão autenticada no estabelecimento.
 
         Raises:
             ClientBlockedError: Se o cliente está inativo no estabelecimento.
@@ -37,8 +39,8 @@ class BookingSessionIssuerProtocol(Protocol):
 
 ```python
 class SessionTokenCacheProtocol(Protocol):
-    async def get(self, phone: str) -> BookingSession | None:
-        """Devolve a sessão cacheada e ainda válida, ou `None`."""
+    async def get(self, establishment_id: uuid.UUID, phone: str) -> BookingSession | None:
+        """Devolve a sessão cacheada do telefone no estabelecimento, ou `None`."""
 
     async def put(self, session: BookingSession) -> None:
         """Guarda a sessão até pouco antes de ela expirar."""
@@ -91,12 +93,15 @@ um cliente novo.
 
 ```python
 class OutboundMessengerProtocol(Protocol):
-    async def send_text(self, contact: Contact, text: str) -> None:
-        """Entrega um texto ao contato. Levanta `DeliveryError` se não conseguir."""
+    async def send_text(self, conversation: ConversationRef, text: str) -> None:
+        """Entrega um texto na conversa. Levanta `DeliveryError` se não conseguir."""
 
-    async def signal_typing(self, contact: Contact) -> None:
+    async def signal_typing(self, conversation: ConversationRef) -> None:
         """Sinaliza ao canal que a resposta está sendo produzida. Falha em silêncio."""
 ```
+
+Recebe `ConversationRef`, e não `Contact`: é a conversa (canal + estabelecimento +
+usuário) que diz por qual bot responder.
 
 `signal_typing` não levanta: um indicador de digitação que não apareceu não é motivo
 para abortar a resposta.

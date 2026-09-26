@@ -11,6 +11,8 @@ from app.modules.agent.domain.entities import BookingSession
 
 _NOW = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
 _PHONE = "5547999123456"
+_ESTABLISHMENT_ID = uuid.UUID("01a04f64-0000-7000-8000-00000000e001")
+_OTHER_ESTABLISHMENT_ID = uuid.UUID("01a04f64-0000-7000-8000-00000000e002")
 
 
 def _session(
@@ -20,6 +22,7 @@ def _session(
 ) -> BookingSession:
     return BookingSession(
         token=token,
+        establishment_id=_ESTABLISHMENT_ID,
         phone=_PHONE,
         client_id=uuid.UUID("01a04f64-0000-7000-8000-000000000000"),
         client_name="Kauan",
@@ -42,11 +45,19 @@ async def test_round_trip_preserva_a_sessao() -> None:
 
     await cache.put(session)
 
-    assert await cache.get(_PHONE) == session
+    assert await cache.get(_ESTABLISHMENT_ID, _PHONE) == session
 
 
 async def test_miss_devolve_none() -> None:
-    assert await _cache(FakeAsyncRedis()).get("desconhecido") is None
+    assert await _cache(FakeAsyncRedis()).get(_ESTABLISHMENT_ID, "desconhecido") is None
+
+
+async def test_sessao_de_um_estabelecimento_nao_serve_para_outro() -> None:
+    # O mesmo usuário do Telegram tem o mesmo telefone sintético em todos os bots.
+    cache = _cache(FakeAsyncRedis())
+    await cache.put(_session())
+
+    assert await cache.get(_OTHER_ESTABLISHMENT_ID, _PHONE) is None
 
 
 async def test_a_chave_nao_expoe_o_telefone() -> None:
@@ -57,7 +68,7 @@ async def test_a_chave_nao_expoe_o_telefone() -> None:
 
     assert keys
     assert all(_PHONE not in key for key in keys)
-    assert all(key.startswith("agente:session:") for key in keys)
+    assert all(key.startswith(f"agente:session:{_ESTABLISHMENT_ID}:") for key in keys)
 
 
 async def test_ttl_expira_antes_do_token_menos_a_margem() -> None:
@@ -87,7 +98,7 @@ class _BoomRedis:
 
 
 async def test_get_engole_falha_de_redis() -> None:
-    assert await _cache(_BoomRedis()).get(_PHONE) is None
+    assert await _cache(_BoomRedis()).get(_ESTABLISHMENT_ID, _PHONE) is None
 
 
 async def test_put_engole_falha_de_redis() -> None:

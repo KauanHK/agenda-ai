@@ -1,6 +1,6 @@
 """Entidades do agente.
 
-Camada pura: só `dataclasses`, `enum`, `datetime`, `uuid`. Nenhum I/O, nenhuma
+Camada pura: só `dataclasses`, `enum`, `datetime`, `uuid`, `zoneinfo`. Nenhum I/O, nenhuma
 dependência externa. Tudo imutável (`frozen=True`).
 """
 
@@ -8,12 +8,22 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from zoneinfo import ZoneInfo
 
 
 class Channel(StrEnum):
     """Canal por onde o cliente conversa com o agente."""
 
     TELEGRAM = "telegram"
+
+
+@dataclass(frozen=True, slots=True)
+class Establishment:
+    """O que o agente precisa saber do estabelecimento que atende a conversa."""
+
+    id: uuid.UUID
+    timezone: ZoneInfo
+    """Fuso em que o cliente fala de "amanhã" e "sexta"."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,10 +40,20 @@ class Contact:
 class IncomingMessage:
     """Uma mensagem de texto recebida de um canal."""
 
+    establishment: Establishment
     contact: Contact
     text: str
     channel_message_id: str
     received_at: datetime
+
+    @property
+    def conversation(self) -> ConversationRef:
+        """A conversa a que a mensagem pertence: canal, estabelecimento e usuário."""
+        return ConversationRef(
+            channel=self.contact.channel,
+            establishment_id=self.establishment.id,
+            channel_user_id=self.contact.channel_user_id,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,8 +85,10 @@ class BookingSession:
     """A sessão autenticada do cliente no AgendaBot."""
 
     token: str
+    establishment_id: uuid.UUID
+    """Estabelecimento da sessão; junto com o telefone, é a chave do cache."""
     phone: str
-    """Telefone canônico (E.164 sem `+`) que originou a sessão; é a chave do cache."""
+    """Telefone canônico (E.164 sem `+`) que originou a sessão."""
     client_id: uuid.UUID
     client_name: str
     expires_at: datetime
@@ -82,16 +104,19 @@ class BookingSession:
 
 @dataclass(frozen=True, slots=True)
 class ConversationRef:
-    """Identifica a thread de conversa no checkpointer."""
+    """Identifica a conversa: a thread no checkpointer e o destino da resposta."""
 
     channel: Channel
+    establishment_id: uuid.UUID
     channel_user_id: str
 
     @property
     def thread_id(self) -> str:
-        """A chave estável da thread: `telegram:123456`.
+        """A chave estável da thread: `telegram:{establishment_id}:123456`.
 
-        O canal faz parte da chave: é ele que impede que a thread do Telegram
-        colida com a de outro canal quando ele entrar.
+        O canal impede que a thread do Telegram colida com a de outro canal. O
+        estabelecimento impede que o mesmo usuário, falando com os bots de dois
+        estabelecimentos, misture os históricos: no Telegram, o `chat_id` de uma
+        conversa privada é o id do usuário, igual em todos os bots.
         """
-        return f"{self.channel.value}:{self.channel_user_id}"
+        return f"{self.channel.value}:{self.establishment_id}:{self.channel_user_id}"

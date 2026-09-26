@@ -1,6 +1,6 @@
 # 02 — Domínio
 
-Camada pura: só `dataclasses`, `enum`, `datetime`, `uuid`. Nenhum I/O, nenhuma
+Camada pura: só `dataclasses`, `enum`, `datetime`, `uuid`, `zoneinfo`. Nenhum I/O, nenhuma
 dependência externa. Tudo imutável (`frozen=True`).
 
 ## Entidades
@@ -8,6 +8,14 @@ dependência externa. Tudo imutável (`frozen=True`).
 `app/modules/agent/domain/entities.py`
 
 ```python
+@dataclass(frozen=True, slots=True)
+class Establishment:
+    """O que o agente precisa saber do estabelecimento que atende a conversa."""
+
+    id: uuid.UUID
+    timezone: ZoneInfo            # fuso em que o cliente fala de "amanhã" e "sexta"
+
+
 @dataclass(frozen=True, slots=True)
 class Contact:
     """Quem está conversando, do ponto de vista do agente."""
@@ -22,10 +30,15 @@ class Contact:
 class IncomingMessage:
     """Uma mensagem de texto recebida de um canal."""
 
+    establishment: Establishment  # dono do bot que recebeu a mensagem
     contact: Contact
     text: str
     channel_message_id: str
     received_at: datetime
+
+    @property
+    def conversation(self) -> ConversationRef:
+        """Canal, estabelecimento e usuário da mensagem."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +54,8 @@ class BookingSession:
     """A sessão autenticada do cliente no AgendaBot."""
 
     token: str
-    phone: str                    # telefone canônico que originou a sessão; chave do cache
+    establishment_id: uuid.UUID   # com o telefone, é a chave do cache
+    phone: str                    # telefone canônico que originou a sessão
     client_id: uuid.UUID
     client_name: str
     expires_at: datetime
@@ -53,15 +67,21 @@ class BookingSession:
 
 @dataclass(frozen=True, slots=True)
 class ConversationRef:
-    """Identifica a thread de conversa no checkpointer."""
+    """Identifica a conversa: a thread no checkpointer e o destino da resposta."""
 
     channel: Channel
+    establishment_id: uuid.UUID
     channel_user_id: str
 
     @property
     def thread_id(self) -> str:
-        """A chave estável da thread: `telegram:123456`."""
+        """A chave estável da thread: `telegram:{establishment_id}:123456`."""
 ```
+
+Todo estado do agente é chaveado por estabelecimento. No Telegram, o `chat_id` de uma
+conversa privada é o id do usuário, igual em todos os bots: sem o estabelecimento na
+chave, o mesmo usuário falando com dois bots misturaria os históricos e reaproveitaria
+a sessão de um estabelecimento no outro.
 
 ## Enums
 

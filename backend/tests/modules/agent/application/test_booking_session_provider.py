@@ -16,6 +16,7 @@ from tests.modules.agent.fakes.session_issuer import FakeSessionIssuer
 
 _NOW = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
 _PHONE = "5547999123456"
+_ESTABLISHMENT_ID = uuid.UUID("01a04f64-0000-7000-8000-00000000e001")
 
 
 def _contact() -> Contact:
@@ -30,6 +31,7 @@ def _contact() -> Contact:
 def _session(*, token: str, expires_at: datetime) -> BookingSession:
     return BookingSession(
         token=token,
+        establishment_id=_ESTABLISHMENT_ID,
         phone=_PHONE,
         client_id=uuid.UUID("01a04f64-0000-7000-8000-000000000000"),
         client_name="Kauan",
@@ -56,10 +58,10 @@ def _provider(
 async def test_cache_hit_valido_nao_chama_o_issuer() -> None:
     cached = _session(token="cache", expires_at=_NOW + timedelta(minutes=5))
     cache = FakeSessionCache()
-    cache.store[_PHONE] = cached
+    cache.store[_ESTABLISHMENT_ID, _PHONE] = cached
     issuer = FakeSessionIssuer(_session(token="novo", expires_at=_NOW + timedelta(minutes=10)))
 
-    result = await _provider(issuer=issuer, cache=cache).for_contact(_contact())
+    result = await _provider(issuer=issuer, cache=cache).for_contact(_contact(), _ESTABLISHMENT_ID)
 
     assert result is cached
     assert issuer.calls == []
@@ -69,13 +71,13 @@ async def test_sessao_expirando_dentro_da_margem_reemite() -> None:
     quase = _session(token="cache", expires_at=_NOW + timedelta(seconds=30))
     fresca = _session(token="novo", expires_at=_NOW + timedelta(minutes=10))
     cache = FakeSessionCache()
-    cache.store[_PHONE] = quase
+    cache.store[_ESTABLISHMENT_ID, _PHONE] = quase
     issuer = FakeSessionIssuer(fresca)
 
-    result = await _provider(issuer=issuer, cache=cache).for_contact(_contact())
+    result = await _provider(issuer=issuer, cache=cache).for_contact(_contact(), _ESTABLISHMENT_ID)
 
     assert result is fresca
-    assert issuer.calls == [(_PHONE, "Kauan")]
+    assert issuer.calls == [(_ESTABLISHMENT_ID, _PHONE, "Kauan")]
     assert cache.put_calls == [fresca]
 
 
@@ -84,10 +86,10 @@ async def test_cache_miss_reemite_e_guarda() -> None:
     issuer = FakeSessionIssuer(fresca)
     cache = FakeSessionCache()
 
-    result = await _provider(issuer=issuer, cache=cache).for_contact(_contact())
+    result = await _provider(issuer=issuer, cache=cache).for_contact(_contact(), _ESTABLISHMENT_ID)
 
     assert result is fresca
-    assert cache.store[_PHONE] is fresca
+    assert cache.store[_ESTABLISHMENT_ID, _PHONE] is fresca
 
 
 async def test_cache_indisponivel_reemite_e_segue() -> None:
@@ -95,10 +97,10 @@ async def test_cache_indisponivel_reemite_e_segue() -> None:
     issuer = FakeSessionIssuer(fresca)
     cache = UnavailableSessionCache()
 
-    result = await _provider(issuer=issuer, cache=cache).for_contact(_contact())
+    result = await _provider(issuer=issuer, cache=cache).for_contact(_contact(), _ESTABLISHMENT_ID)
 
     assert result is fresca
-    assert issuer.calls == [(_PHONE, "Kauan")]
+    assert issuer.calls == [(_ESTABLISHMENT_ID, _PHONE, "Kauan")]
     assert cache.put_calls == [fresca]
 
 
@@ -108,7 +110,18 @@ async def test_usa_o_telefone_do_phone_resolver() -> None:
     issuer = FakeSessionIssuer(fresca)
 
     await _provider(issuer=issuer, cache=FakeSessionCache(), resolver=resolver).for_contact(
-        _contact()
+        _contact(), _ESTABLISHMENT_ID
     )
 
     assert resolver.calls == [(Channel.TELEGRAM, "42")]
+
+
+async def test_repassa_o_estabelecimento_ao_cache_e_ao_emissor() -> None:
+    fresca = _session(token="novo", expires_at=_NOW + timedelta(minutes=10))
+    issuer = FakeSessionIssuer(fresca)
+    cache = FakeSessionCache()
+
+    await _provider(issuer=issuer, cache=cache).for_contact(_contact(), _ESTABLISHMENT_ID)
+
+    assert cache.get_calls == [(_ESTABLISHMENT_ID, _PHONE)]
+    assert issuer.calls == [(_ESTABLISHMENT_ID, _PHONE, "Kauan")]

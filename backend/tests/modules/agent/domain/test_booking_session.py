@@ -5,12 +5,14 @@ from datetime import UTC, datetime, timedelta
 
 from app.modules.agent.domain.entities import BookingSession
 
+_ESTABLISHMENT_ID = uuid.UUID("01a04f64-0000-7000-8000-00000000e001")
 _EXPIRES_AT = datetime(2026, 8, 29, 12, 0, 0, tzinfo=UTC)
 
 
 def _session() -> BookingSession:
     return BookingSession(
         token="jwt",
+        establishment_id=_ESTABLISHMENT_ID,
         phone="5547999123456",
         client_id=uuid.UUID("01a04f64-0000-7000-8000-000000000000"),
         client_name="Kauan",
