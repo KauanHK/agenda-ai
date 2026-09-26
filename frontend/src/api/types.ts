@@ -115,6 +115,14 @@ export interface OperatingHourRead { id: UUID; establishment_id: UUID; weekday: 
 export interface OperatingHourItem { weekday: number; start_time: string; end_time: string; }
 export interface OperatingHoursUpdate { items: OperatingHourItem[]; }
 
+// ============ Channels ============
+export interface TelegramChannelRead {
+  connected: boolean;
+  bot_id: number | null;
+  bot_username: string | null;
+  connected_at: ISODateTime | null;
+}
+
 // ============ Clients ============
 export interface ClientRead {
   id: UUID; establishment_id: UUID;
