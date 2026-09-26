@@ -6,6 +6,7 @@ export * as clients from "./clients";
 export * as services from "./services";
 export * as schedulings from "./schedulings";
 export * as operatingHours from "./operating-hours";
+export * as channels from "./channels";
 export * as templates from "./templates";
 export * as notifications from "./notifications";
 export * as unavailabilities from "./unavailabilities";

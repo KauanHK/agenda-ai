@@ -4,6 +4,7 @@ import { Badge, Button, Card, Input, PageHeader, Select } from "@/components/ui"
 import { useToast } from "@/components/ToastProvider";
 import { useAuth } from "@/store/auth";
 import * as estApi from "@/api/establishments";
+import { TelegramChannelCard } from "@/screens/TelegramChannelCard";
 import type { EstablishmentUpdate } from "@/api/types";
 
 const TIMEZONES = [
@@ -23,11 +24,13 @@ const formatDocument = (doc: string, type: string): string => {
 
 export const Settings: React.FC = () => {
   const toast = useToast();
-  const { activeEstablishment, memberships, refreshEstablishment } = useAuth();
+  const { user, activeEstablishment, memberships, refreshEstablishment } = useAuth();
 
   const isAdmin = memberships.some(
     (m) => m.establishment_id === activeEstablishment?.id && m.role === "establishment_admin",
   );
+  // Conectar o Telegram também vale para o global_admin (onboarding).
+  const canManageChannels = !!user?.is_global_admin || isAdmin;
 
   const [form, setForm] = React.useState<Partial<EstablishmentUpdate>>({});
   const [saving, setSaving] = React.useState(false);
@@ -174,6 +177,8 @@ export const Settings: React.FC = () => {
           )}
         </div>
       </Card>
+
+      <TelegramChannelCard establishmentId={est.id} canEdit={canManageChannels} />
 
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
