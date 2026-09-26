@@ -7,9 +7,9 @@ Lê o mesmo `.env` da raiz que o backend (`app.core.settings.ENV_FILE`). Toda va
 do agente começa com `AGENT_`, para não colidir com as do backend no mesmo arquivo.
 
 A configuração é dividida em grupos aninhados (`agendabot`, `telegram`, `llm`, ...).
-No ambiente, cada grupo é um prefixo separado por `__`: a chave do serviço do
-AgendaBot é `AGENT_AGENDABOT__SERVICE_KEY`, o token do bot é
-`AGENT_TELEGRAM__BOT_TOKEN`, e assim por diante.
+No ambiente, cada grupo é um prefixo separado por `__`: a URL do MCP é
+`AGENT_AGENDABOT__MCP_URL`, o token do bot é `AGENT_TELEGRAM__BOT_TOKEN`, e assim
+por diante.
 """
 
 from typing import Literal, Self
@@ -22,11 +22,9 @@ from app.core.settings import ENV_FILE
 
 
 class AgendaBotSettings(BaseModel):
-    """Acesso à API e ao MCP do AgendaBot. Prefixo `AGENT_AGENDABOT__`."""
+    """Acesso ao MCP do AgendaBot. Prefixo `AGENT_AGENDABOT__`."""
 
-    api_url: str
     mcp_url: str
-    service_key: SecretStr
     establishment_id: UUID
     establishment_timezone: str = "America/Sao_Paulo"
 
@@ -90,14 +88,11 @@ class IdentitySettings(BaseModel):
 class HTTPSettings(BaseModel):
     """Timeouts de HTTP e MCP. Prefixo `AGENT_HTTP__`.
 
-    `connect_timeout_seconds` é comum aos dois adapters — abrir a conexão TCP+TLS
-    não deveria passar disso. Os tetos de leitura/escrita são separados por
-    adapter: o AgendaBot faz trabalho no backend ao emitir a sessão (`timeout_seconds`,
-    mais folgado); o Telegram responde `sendMessage` rápido ou não responde
-    (`telegram_read_timeout_seconds`, curto). Ver a tabela em `docs/09`.
+    `connect_timeout_seconds` limita a abertura da conexão TCP+TLS com o Telegram;
+    `telegram_read_timeout_seconds` é curto porque a Bot API responde `sendMessage`
+    rápido ou não responde. Ver a tabela em `docs/09`.
     """
 
-    timeout_seconds: float = 10.0
     connect_timeout_seconds: float = 5.0
     telegram_read_timeout_seconds: float = 5.0
     mcp_timeout_seconds: float = 15.0

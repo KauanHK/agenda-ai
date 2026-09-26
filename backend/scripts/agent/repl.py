@@ -28,13 +28,13 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import ValidationError
 
-from app.modules.agent.adapters.agendabot.http_client import build_agendabot_client
-from app.modules.agent.adapters.agendabot.session_issuer import AgendaBotSessionIssuer
-from app.modules.agent.adapters.agendabot.tool_provider import AgendaBotToolProvider
+from app.core.db.session import db
+from app.modules.agent.adapters.booking.session_issuer import InProcessSessionIssuer
 from app.modules.agent.adapters.identity.synthetic_phone import SyntheticPhoneResolver
 from app.modules.agent.adapters.langgraph.graph import build_graph
 from app.modules.agent.adapters.langgraph.runner import LangGraphAgentRunner
 from app.modules.agent.adapters.llm.factory import build_chat_model
+from app.modules.agent.adapters.mcp_client.tool_provider import AgendaBotToolProvider
 from app.modules.agent.adapters.redis.checkpointer import open_conversation_checkpointer
 from app.modules.agent.adapters.redis.client import build_redis_client
 from app.modules.agent.adapters.redis.session_cache import RedisSessionTokenCache
@@ -132,18 +132,11 @@ async def _build_turn_handler(
     in_memory: bool,
 ) -> TurnHandler:
     """Monta as dependências reais e devolve uma função que roda um turno."""
-    client = await stack.enter_async_context(
-        build_agendabot_client(
-            base_url=settings.agendabot.api_url,
-            service_key=settings.agendabot.service_key.get_secret_value(),
-            connect_timeout_seconds=settings.http.connect_timeout_seconds,
-            read_timeout_seconds=settings.http.timeout_seconds,
-        )
-    )
+    db.init()
+    stack.push_async_callback(db.close)
     session_provider = BookingSessionProvider(
         phone_resolver=SyntheticPhoneResolver(settings.identity.synthetic_phone_prefix),
-        issuer=AgendaBotSessionIssuer(
-            client,
+        issuer=InProcessSessionIssuer(
             establishment_id=settings.agendabot.establishment_id,
             clock=_now_utc,
         ),

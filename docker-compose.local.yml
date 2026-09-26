@@ -137,8 +137,6 @@ services:
       <<: *backend-env
       AGENT_REDIS__URL: redis://agent-redis:6379/0
       AGENT_AGENDABOT__MCP_URL: http://mcp:8001/mcp
-      # a API roda com --root-path /api; pelo nginx o caminho /api/agent/... bate
-      AGENT_AGENDABOT__API_URL: http://nginx
     ports:
       - "8002:8002"
     depends_on:

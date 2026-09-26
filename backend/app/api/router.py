@@ -2,8 +2,6 @@ from fastapi import APIRouter, Depends
 
 from app.api.deps.auth import get_current_establishment_actor
 from app.modules.auth.api.router import router as auth_router
-from app.modules.booking.adapters.http.dependencies import ServiceKeyDep
-from app.modules.booking.adapters.http.router import router as booking_router
 from app.modules.clients.api.router import router as clients_router
 from app.modules.dashboard.api.router import router as dashboard_router
 from app.modules.establishments.api.router import router as establishments_router
@@ -83,15 +81,6 @@ def build_api_router() -> APIRouter:
 
     router.include_router(
         establishments_router, prefix="/establishments", tags=["Establishments"]
-    )
-
-    # Canal automático (WhatsApp): máquina-a-máquina, autenticado por chave de serviço
-    # em vez do JWT do painel.
-    router.include_router(
-        booking_router,
-        prefix="/agent",
-        tags=["Agent"],
-        dependencies=[ServiceKeyDep],
     )
 
     router.include_router(build_establishment_router())

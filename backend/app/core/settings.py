@@ -45,8 +45,6 @@ class Settings(BaseSettings):
 
     # Assina os tokens de sessão do cliente no MCP, separado do JWT do painel.
     AGENT_SESSION_SECRET: str
-    # Autoriza o orquestrador do WhatsApp a emitir sessões (header X-Service-Key).
-    AGENT_SERVICE_KEY: str
 
     @property
     def sqlalchemy_database_uri(self) -> str:

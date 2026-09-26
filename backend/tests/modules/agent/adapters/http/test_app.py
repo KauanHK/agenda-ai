@@ -1,6 +1,6 @@
 """Teste de fumaça de `create_app`: lifespan monta o container e as rotas existem.
 
-`build_container` toca Redis/AgendaBot/LLM no boot; aqui ele é trocado por um
+`build_container` toca banco/Redis/LLM no boot; aqui ele é trocado por um
 dublê para exercitar só a fábrica e o registro das rotas.
 """
 
@@ -19,9 +19,7 @@ from app.modules.agent.settings import Settings
 def _settings() -> Settings:
     return Settings(
         agendabot={
-            "api_url": "https://agenda.test",
             "mcp_url": "https://agenda.test/mcp",
-            "service_key": "service-key",
             "establishment_id": "01a04f5b-0e84-7530-be67-63f08e7b2269",
         },  # type: ignore[arg-type]
         telegram={

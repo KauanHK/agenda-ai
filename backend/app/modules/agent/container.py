@@ -2,9 +2,9 @@
 
 Só este módulo (e `main.py`) conhece as classes concretas de infraestrutura;
 ninguém mais instancia adapter. O `AsyncExitStack` devolvido guarda tudo que
-precisa ser fechado no shutdown (clientes HTTP, Redis, saver).
+precisa ser fechado no shutdown (pool do banco, clientes HTTP, Redis, saver).
 
-Ordem de construção: Redis → checkpointer → clientes HTTP → sessão → grafo →
+Ordem de construção: banco → Redis → checkpointer → cliente HTTP → sessão → grafo →
 adapters do Telegram → casos de uso → roteador do webhook.
 """
 
@@ -20,13 +20,13 @@ from zoneinfo import ZoneInfo
 
 from redis.exceptions import RedisError
 
-from app.modules.agent.adapters.agendabot.http_client import build_agendabot_client
-from app.modules.agent.adapters.agendabot.session_issuer import AgendaBotSessionIssuer
-from app.modules.agent.adapters.agendabot.tool_provider import AgendaBotToolProvider
+from app.core.db.session import db
+from app.modules.agent.adapters.booking.session_issuer import InProcessSessionIssuer
 from app.modules.agent.adapters.identity.synthetic_phone import SyntheticPhoneResolver
 from app.modules.agent.adapters.langgraph.graph import build_graph
 from app.modules.agent.adapters.langgraph.runner import LangGraphAgentRunner
 from app.modules.agent.adapters.llm.factory import build_chat_model
+from app.modules.agent.adapters.mcp_client.tool_provider import AgendaBotToolProvider
 from app.modules.agent.adapters.redis.checkpointer import open_conversation_checkpointer
 from app.modules.agent.adapters.redis.client import build_redis_client
 from app.modules.agent.adapters.redis.conversation_history import (
@@ -90,6 +90,9 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
     """Instancia e liga tudo, registrando no `stack` o que precisa ser fechado."""
     establishment_tz = ZoneInfo(settings.agendabot.establishment_timezone)
 
+    db.init()
+    stack.push_async_callback(db.close)
+
     checkpointer = await stack.enter_async_context(
         open_conversation_checkpointer(
             settings.redis.url,
@@ -108,14 +111,6 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
             return {"redis": "down"}
         return {"redis": "ok"}
 
-    agendabot_client = await stack.enter_async_context(
-        build_agendabot_client(
-            base_url=settings.agendabot.api_url,
-            service_key=settings.agendabot.service_key.get_secret_value(),
-            connect_timeout_seconds=settings.http.connect_timeout_seconds,
-            read_timeout_seconds=settings.http.timeout_seconds,
-        )
-    )
     telegram_client = await stack.enter_async_context(
         build_telegram_client(
             api_root=settings.telegram.api_root,
@@ -128,8 +123,7 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
     phone_resolver = SyntheticPhoneResolver(settings.identity.synthetic_phone_prefix)
     session_provider = BookingSessionProvider(
         phone_resolver=phone_resolver,
-        issuer=AgendaBotSessionIssuer(
-            agendabot_client,
+        issuer=InProcessSessionIssuer(
             establishment_id=settings.agendabot.establishment_id,
             clock=_utc_now,
         ),
