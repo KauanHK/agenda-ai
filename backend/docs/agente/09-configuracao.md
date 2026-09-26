@@ -227,7 +227,7 @@ comportamento de um adapter, atualiza aqui.
 | Tools MCP | `mcp_client/tool_provider.py` | — (timeout total) | `AGENT_HTTP__MCP_TIMEOUT_SECONDS` (15 s), `asyncio.timeout` | **nenhum** — handshake MCP não é comprovadamente idempotente | — | `BookingSessionError` |
 | Envio ao Telegram (`sendMessage`) | `telegram/client.py` | `AGENT_HTTP__CONNECT_TIMEOUT_SECONDS` (5 s) | `AGENT_HTTP__TELEGRAM_READ_TIMEOUT_SECONDS` (5 s) | 1 vez **só** em `ConnectError` / `ConnectTimeout`; `429` respeita `retry_after` e tenta 1 vez | falha ao abrir a conexão (request não saiu) | `DeliveryError` |
 | `sendChatAction` (digitando) | `telegram/client.py` | idem | idem | nenhum | — | engolido (log em `debug`) |
-| `setWebhook` / `getWebhookInfo` | `telegram/webhook_registry.py` | idem | idem | nenhum — operação manual, quem chamou repete | — | `WebhookRegistrationError` (`502` na rota `/admin`) |
+| `setWebhook` / `getWebhookInfo` | `channels/adapters/telegram/bot_api.py` | 5 s (fixo em `build_bot_api_client`) | 10 s (fixo) | nenhum — operação manual, quem chamou repete | — | `WebhookRegistrationError` (`502` na rota `/admin`) |
 | Checkpointer (histórico) | `redis/checkpointer.py` | — | — | nenhum | — | `ConversationStateError` (turno cai de forma visível) |
 | Cache de sessão | `redis/session_cache.py` | — | — | nenhum | — | engolido: `get` → `None`, `put` no-op, log em `warning`; o provider reemite |
 | Grafo do agente | `agent/runner.py` | — | — | `recursion_limit` = `MAX_AGENT_STEPS * 2 + 1` | os ciclos do próprio grafo | `AgentUnavailableError` (também para qualquer falha do LLM) |
@@ -267,5 +267,5 @@ curl https://agente.exemplo/admin/telegram/webhook \
 ```
 
 Em desenvolvimento, `scripts/agent/set_webhook.py` faz o mesmo `setWebhook` sem passar pela
-API (usa o mesmo `TelegramWebhookRegistry`), o que serve para túneis efêmeros antes
+API (usa o mesmo `TelegramBotApi` do módulo `channels`), o que serve para túneis efêmeros antes
 de a aplicação subir.

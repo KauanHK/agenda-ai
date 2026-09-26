@@ -13,12 +13,17 @@ import argparse
 import asyncio
 import json
 
-import httpx
 from pydantic import ValidationError
 
 from app.modules.agent.settings import Settings
-
-_TELEGRAM_API_ROOT = "https://api.telegram.org"
+from app.modules.channels.adapters.telegram.bot_api import (
+    TelegramBotApi,
+    build_bot_api_client,
+)
+from app.modules.channels.domain.exceptions import (
+    InvalidBotTokenError,
+    TelegramApiError,
+)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -34,21 +39,19 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _print_result(label: str, response: httpx.Response) -> None:
-    print(f"\n{label}: HTTP {response.status_code}")
-    print(json.dumps(response.json(), indent=2, ensure_ascii=False))
-
-
-async def _run(args: argparse.Namespace, settings: Settings) -> None:
+async def _run(args: argparse.Namespace, settings: Settings) -> int:
     token = settings.telegram.bot_token.get_secret_value()
-    async with httpx.AsyncClient(
-        base_url=f"{_TELEGRAM_API_ROOT}/bot{token}", timeout=httpx.Timeout(10.0)
-    ) as client:
-        response = await client.post(
-            "/deleteWebhook", json={"drop_pending_updates": args.drop_pending}
-        )
-        _print_result("deleteWebhook", response)
-        _print_result("getWebhookInfo", await client.get("/getWebhookInfo"))
+    async with build_bot_api_client(settings.telegram.api_root) as client:
+        bot_api = TelegramBotApi(client)
+        try:
+            await bot_api.delete_webhook(token, drop_pending_updates=args.drop_pending)
+            info = await bot_api.get_webhook_info(token)
+        except (InvalidBotTokenError, TelegramApiError) as error:
+            print(f"Falhou: {error}")
+            return 1
+    print("Webhook removido.\n\ngetWebhookInfo:")
+    print(json.dumps(info, indent=2, ensure_ascii=False))
+    return 0
 
 
 def main() -> int:
@@ -59,8 +62,7 @@ def main() -> int:
         print("Configuração inválida — preencha o `.env` (veja `.env.example`):\n")
         print(error)
         return 2
-    asyncio.run(_run(args, settings))
-    return 0
+    return asyncio.run(_run(args, settings))
 
 
 if __name__ == "__main__":

@@ -91,8 +91,7 @@ agente-agenda/
 │   │   └── telegram/
 │   │       ├── client.py             # sendMessage / sendChatAction
 │   │       ├── update_parser.py      # payload cru → IncomingMessage
-│   │       ├── formatting.py         # texto do LLM → MarkdownV2 seguro
-│   │       └── webhook_registry.py   # setWebhook / getWebhookInfo
+│   │       └── formatting.py         # texto do LLM → MarkdownV2 seguro
 │   │
 │   └── interfaces/
 │       └── http/
@@ -132,5 +131,5 @@ falha se a tabela acima for violada.
 | Tool MCP | `tool_provider.py` / nó de tools | devolvido ao LLM como texto, não levanta |
 | Redis fora | `redis/*` | `ConversationStateError` |
 | API do Telegram | `telegram/client.py` | `DeliveryError` |
-| `setWebhook` / `getWebhookInfo` | `telegram/webhook_registry.py` | `WebhookRegistrationError` (→ `502` em `routes/admin.py`) |
+| `setWebhook` / `getWebhookInfo` | `channels/adapters/telegram/bot_api.py` (`InvalidBotTokenError` / `TelegramApiError`, traduzidos no `container.py`) | `WebhookRegistrationError` (→ `502` em `routes/admin.py`) |
 | LLM | `agent/runner.py` | `AgentUnavailableError` |

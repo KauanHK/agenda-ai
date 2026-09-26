@@ -20,10 +20,16 @@ import json
 
 from pydantic import ValidationError
 
-from app.modules.agent.adapters.telegram.client import build_telegram_client
-from app.modules.agent.adapters.telegram.webhook_registry import TelegramWebhookRegistry
-from app.modules.agent.domain.exceptions import WebhookRegistrationError
+from app.modules.agent.container import webhook_url
 from app.modules.agent.settings import Settings
+from app.modules.channels.adapters.telegram.bot_api import (
+    TelegramBotApi,
+    build_bot_api_client,
+)
+from app.modules.channels.domain.exceptions import (
+    InvalidBotTokenError,
+    TelegramApiError,
+)
 
 
 def _parse_args() -> argparse.Namespace:
@@ -44,22 +50,24 @@ def _parse_args() -> argparse.Namespace:
 
 
 async def _run(args: argparse.Namespace, settings: Settings) -> int:
-    client = build_telegram_client(
-        api_root=settings.telegram.api_root,
-        bot_token=settings.telegram.bot_token.get_secret_value(),
-        connect_timeout_seconds=settings.http.connect_timeout_seconds,
-        read_timeout_seconds=settings.http.telegram_read_timeout_seconds,
-    )
+    token = settings.telegram.bot_token.get_secret_value()
     secret = settings.telegram.webhook_secret.get_secret_value()
-    registry = TelegramWebhookRegistry(client, webhook_secret=secret)
-    print(f"Webhook  : {registry.webhook_url(args.base_url).replace(secret, '***')}")
+    url = webhook_url(args.base_url, secret)
+    print(f"Webhook  : {url.replace(secret, '***')}")
     print("Updates  : message")
     print(f"Pendentes: {'descartar' if args.drop_pending else 'manter'}")
 
-    async with client:
+    async with build_bot_api_client(settings.telegram.api_root) as client:
+        bot_api = TelegramBotApi(client)
         try:
-            info = await registry.register(args.base_url, drop_pending_updates=args.drop_pending)
-        except WebhookRegistrationError as error:
+            await bot_api.set_webhook(
+                token,
+                url=url,
+                secret_token=secret,
+                drop_pending_updates=args.drop_pending,
+            )
+            info = await bot_api.get_webhook_info(token)
+        except (InvalidBotTokenError, TelegramApiError) as error:
             print(f"\nFalhou: {error}")
             return 1
     print("\ngetWebhookInfo:")
