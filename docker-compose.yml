@@ -48,6 +48,8 @@ services:
         condition: service_healthy
       mcp:
         condition: service_healthy
+      agent:
+        condition: service_healthy
       frontend:
         condition: service_started
     expose:
@@ -138,6 +140,45 @@ services:
       retries: 5
       start_period: 30s
 
+  # agente de IA do Telegram: recebe o webhook, conversa com o LLM e usa o MCP
+  agent:
+    <<: *backend
+    container_name: agenda-bot-agent
+    networks:
+      - backend
+      - egress
+    depends_on:
+      agent-redis:
+        condition: service_healthy
+      mcp:
+        condition: service_healthy
+    command: >
+      uv run --no-sync uvicorn app.main_agent:app
+      --host 0.0.0.0 --port 8002
+      --proxy-headers --forwarded-allow-ips='*'
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis do agente, separado do Redis do Celery: o checkpointer do LangGraph
+  # exige Redis 8 (busca e JSON embutidos, índices só no db 0) e persistência.
+  agent-redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - agentredis:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   worker:
     <<: *backend
     networks:
@@ -159,3 +200,4 @@ networks:
 
 volumes:
   pgdata:
+  agentredis:

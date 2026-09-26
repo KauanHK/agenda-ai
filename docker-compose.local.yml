@@ -7,6 +7,7 @@
 #   /        → frontend
 #   /api/*   → api        (exposta também em http://localhost:8745 p/ Swagger em /docs)
 #   /mcp     → mcp        (exposta também em http://localhost:8001/mcp p/ o Inspector)
+#   /webhook/ → agent     (exposto também em http://localhost:8002 p/ um túnel HTTPS)
 #   db       → localhost:5432   redis → localhost:6379
 #
 # Segredos (JWT, Google, Evolution, AGENT_SESSION_SECRET) vêm do .env na raiz.
@@ -49,6 +50,8 @@ services:
       - ./nginx.local.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       api:
+        condition: service_healthy
+      agent:
         condition: service_healthy
       frontend:
         condition: service_started
@@ -126,6 +129,45 @@ services:
       retries: 5
       start_period: 30s
 
+  # agente de IA do Telegram; exposto em :8002 para um túnel HTTPS (ngrok,
+  # cloudflared) receber o webhook e para as rotas /health e /admin
+  agent:
+    <<: *backend
+    environment:
+      <<: *backend-env
+      AGENT_REDIS__URL: redis://agent-redis:6379/0
+      AGENT_AGENDABOT__MCP_URL: http://mcp:8001/mcp
+      # a API roda com --root-path /api; pelo nginx o caminho /api/agent/... bate
+      AGENT_AGENDABOT__API_URL: http://nginx
+    ports:
+      - "8002:8002"
+    depends_on:
+      agent-redis:
+        condition: service_healthy
+      mcp:
+        condition: service_healthy
+    command: >
+      uv run --no-sync uvicorn app.main_agent:app --host 0.0.0.0 --port 8002
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Redis 8 do checkpointer do LangGraph (separado do Redis 7 do Celery)
+  agent-redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - agentredis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   worker:
     <<: *backend
     command: uv run --no-sync celery -A app.celery_app worker --loglevel=info
@@ -136,3 +178,4 @@ services:
 
 volumes:
   pgdata:
+  agentredis:
