@@ -1,18 +1,19 @@
 """Teste de arquitetura — trava a tabela "Regras de dependência" de `docs/01`.
 
-Percorre `src/**/*.py` com `ast`, extrai cada `import` / `from ... import`,
+Percorre `app/modules/agent/**/*.py` com `ast`, extrai cada `import` / `from ... import`,
 classifica o módulo numa camada e falha se algum import cruzar uma fronteira que
 a arquitetura proíbe:
 
 * `domain`               → só stdlib;
 * `application.ports`     → `domain` (+ stdlib / `typing`);
 * `application.use_cases` → `domain` + `application.ports`;
-* `infrastructure.*`      → `domain` + `application` + `settings` + libs externas,
+* `adapters.*` (infra)    → `domain` + `application` + `settings` + libs externas,
   **nunca** `interfaces` nem a *composition root* (`container` / `main`);
-* `interfaces.*`          → `domain` + `application` + `container` + `settings` + `fastapi`
+* `adapters.http` (interfaces) → `domain` + `application` + `container` + `settings` + `fastapi`
   + stdlib;
-* `container` / `main`    → livre;
-* `logging_config`        → só stdlib; importável por qualquer camada.
+* `container` / `main` (`app.main_agent`) → livre;
+* `logging_config`        → só stdlib; importável por qualquer camada;
+* `settings`              → `pydantic` + `app.core.settings` (caminho do `.env` único).
 
 Reforça, num teste dedicado, o princípio 3 do doc 01: `httpx`, `redis`,
 `telegram`, `langgraph` e `langchain*` são proibidos em `domain` e `application`.
@@ -31,8 +32,9 @@ from pathlib import Path
 
 import pytest
 
-_ROOT_PACKAGE = "src"
-_SRC = Path(__file__).resolve().parent.parent / _ROOT_PACKAGE
+_ROOT_PACKAGE = "app.modules.agent"
+_MAIN_MODULE = "app.main_agent"
+_SRC = Path(__file__).resolve().parents[3] / "app" / "modules" / "agent"
 
 # --- camadas -----------------------------------------------------------------
 
@@ -45,8 +47,8 @@ _INTERFACES = "interfaces"
 _CONTAINER = "container"
 _MAIN = "main"
 _SETTINGS = "settings"
-_LOGGING = "logging_config"  # `src/logging_config.py` — cross-cutting, só stdlib
-_ROOT = "root"  # `src/__init__.py`
+_LOGGING = "logging_config"  # `logging_config.py` — cross-cutting, só stdlib
+_ROOT = "root"  # `app/modules/agent/__init__.py`
 
 # Prefixos das bibliotecas de I/O que o princípio 3 do doc 01 nomeia como
 # proibidas em `domain` e `application`.
@@ -57,7 +59,9 @@ _PURE_LAYERS = {_DOMAIN, _PORTS, _USE_CASES, _APPLICATION}
 
 
 def _classify(module: str) -> str | None:
-    """Camada de um módulo `src...`; `None` se for um top-level desconhecido."""
+    """Camada de um módulo do agente; `None` se for um top-level desconhecido."""
+    if module == _MAIN_MODULE:
+        return _MAIN
     if module == _ROOT_PACKAGE:
         return _ROOT
     if not module.startswith(_ROOT_PACKAGE + "."):
@@ -73,14 +77,11 @@ def _classify(module: str) -> str | None:
         if parts[1:2] == ["use_cases"]:
             return _USE_CASES
         return _APPLICATION
-    if head == "infrastructure":
-        return _INFRA
-    if head == "interfaces":
-        return _INTERFACES
+    if head == "adapters":
+        # `adapters/http` é a camada `interfaces`; os demais adapters, `infrastructure`.
+        return _INTERFACES if parts[1:2] == ["http"] else _INFRA
     if rest == "container":
         return _CONTAINER
-    if rest == "main":
-        return _MAIN
     if rest == "settings":
         return _SETTINGS
     if rest == "logging_config":
@@ -128,7 +129,7 @@ _ALLOWED_THIRD_PARTY: dict[str, frozenset[str] | None] = {
     _APPLICATION: frozenset(),
     _INFRA: None,
     _INTERFACES: frozenset({"fastapi"}),
-    _SETTINGS: frozenset({"pydantic", "pydantic_settings"}),
+    _SETTINGS: frozenset({"pydantic", "pydantic_settings", "app"}),
     _LOGGING: frozenset(),
     _CONTAINER: None,
     _MAIN: None,

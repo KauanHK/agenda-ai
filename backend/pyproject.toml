@@ -28,12 +28,24 @@ mcp = [
 worker = [
     "celery[redis]>=5.6.3",
 ]
+agent = [
+    "langchain-anthropic>=1.7.0",
+    "langchain-core>=1.6.1",
+    "langchain-groq>=1.1.3",
+    "langchain-mcp-adapters>=0.3.2",
+    "langchain-openai>=1.6.0",
+    "langgraph>=1.2.11",
+    "langgraph-checkpoint-redis>=0.5.2",
+    "redis>=7.4.1",
+]
 
 [dependency-groups]
 dev = [
+    "fakeredis>=2.37.1",
     "mypy>=1.20.2",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",
+    "respx>=0.23.1",
     "ruff>=0.15.12",
     "types-passlib>=1.7.7.20260211",
     "types-python-jose>=3.5.0.20260408",
@@ -85,6 +97,13 @@ disallow_untyped_decorators = false  # FastAPI tem decorators sem tipo
 [[tool.mypy.overrides]]
 module = "tests.*"
 disallow_untyped_defs = false  # testes podem ser mais relaxados
+
+# Os construtores do ChatOpenAI e do ChatGroq usam aliases (`model`, `api_key`) que o
+# plugin do pydantic não aceita com `init_typed`. No agente-agenda esses providers
+# eram extras não instalados no type check; aqui ficam como `Any` do mesmo jeito.
+[[tool.mypy.overrides]]
+module = ["langchain_openai.*", "langchain_groq.*"]
+follow_imports = "skip"
 
 
 [tool.pydantic-mypy]

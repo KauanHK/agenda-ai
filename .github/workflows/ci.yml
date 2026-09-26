@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Sincroniza o ambiente a partir do lock
+        run: uv sync --frozen --all-extras --dev
+
+      # As settings do backend são obrigatórias já no import; os testes não
+      # falam com serviço externo, então os valores de exemplo bastam.
+      - name: .env de exemplo
+        run: cp ../.env.example ../.env
+
+      - name: ruff check
+        run: uv run ruff check .
+
+      # Só o agente: o resto do backend ainda tem erros antigos de tipo.
+      - name: mypy (agente)
+        run: uv run mypy app/modules/agent
+
+      - name: pytest
+        run: uv run pytest -q

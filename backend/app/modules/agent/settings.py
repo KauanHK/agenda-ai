@@ -1,12 +1,15 @@
 """Configuração do agente, carregada uma única vez do ambiente.
 
-Este é o único módulo do projeto que lê variáveis de ambiente. Todo o resto recebe
+Este é o único módulo do agente que lê variáveis de ambiente. Todo o resto recebe
 os valores já prontos, por injeção.
+
+Lê o mesmo `.env` da raiz que o backend (`app.core.settings.ENV_FILE`). Toda variável
+do agente começa com `AGENT_`, para não colidir com as do backend no mesmo arquivo.
 
 A configuração é dividida em grupos aninhados (`agendabot`, `telegram`, `llm`, ...).
 No ambiente, cada grupo é um prefixo separado por `__`: a chave do serviço do
-AgendaBot é `AGENT_AGENDABOT__SERVICE_KEY`, o token do bot é `AGENT_TELEGRAM__BOT_TOKEN`, e assim
-por diante.
+AgendaBot é `AGENT_AGENDABOT__SERVICE_KEY`, o token do bot é
+`AGENT_TELEGRAM__BOT_TOKEN`, e assim por diante.
 """
 
 from typing import Literal, Self
@@ -14,6 +17,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.settings import ENV_FILE
 
 
 class AgendaBotSettings(BaseModel):
@@ -108,7 +113,8 @@ class Settings(BaseSettings):
     """Configuração do agente, carregada do ambiente (ou de um arquivo `.env`)."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=ENV_FILE,
+        env_prefix="AGENT_",
         env_nested_delimiter="__",
         extra="ignore",
     )
