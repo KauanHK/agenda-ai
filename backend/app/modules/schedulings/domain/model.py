@@ -17,7 +17,7 @@ from app.modules.schedulings.domain.enums import (
 if TYPE_CHECKING:
     from app.modules.clients.domain.model import Client
     from app.modules.services.domain.model import Service
-    from app.modules.users.domain.model import User
+    from app.modules.users.adapters.db.models import User
 
 
 class Scheduling(Base):
@@ -97,17 +97,17 @@ class Scheduling(Base):
     )
 
     # Relationships for expanded read — loaded only when explicitly requested via selectinload
-    user: Mapped[User] = relationship(  # type: ignore[name-defined]
+    user: Mapped[User] = relationship(
         "User",
         foreign_keys=[user_id],
         lazy="noload",
     )
-    client: Mapped[Client] = relationship(  # type: ignore[name-defined]
+    client: Mapped[Client] = relationship(
         "Client",
         foreign_keys=[client_id],
         lazy="noload",
     )
-    service: Mapped[Service] = relationship(  # type: ignore[name-defined]
+    service: Mapped[Service] = relationship(
         "Service",
         foreign_keys=[service_id],
         lazy="noload",

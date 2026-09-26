@@ -1,5 +1,5 @@
 import uuid
-from typing import Any
+from typing import Any, cast
 
 import sqlalchemy as sa
 from sqlalchemy.orm import selectinload
@@ -8,7 +8,9 @@ from app.core.db.repository import BaseRepository
 from app.core.exceptions import NotFoundError
 from app.core.pagination.params import PageParams
 from app.core.roles import UserRole
-from app.modules.establishments.domain.model import Establishment as EstablishmentModel
+from app.modules.establishments.adapters.db.models import (
+    Establishment as EstablishmentModel,
+)
 from app.modules.memberships.adapters.db.models import Membership as MembershipModel
 from app.modules.memberships.application.dtos.filters import MembershipFilters
 from app.modules.memberships.domain.entities import (
@@ -184,7 +186,7 @@ class MembershipsRepository(
             self.model.establishment_id == establishment_id,
         )
         result = await self._session.execute(stmt)
-        if result.rowcount == 0:
+        if cast("sa.CursorResult[Any]", result).rowcount == 0:
             raise NotFoundError("Membership não encontrada.")
 
     def _to_entity(self, row: MembershipModel) -> Membership:
