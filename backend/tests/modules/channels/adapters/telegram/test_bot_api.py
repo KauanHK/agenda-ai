@@ -23,12 +23,7 @@ _BASE = f"https://api.telegram.org/bot{_BOT_TOKEN}"
 _GET_ME = f"{_BASE}/getMe"
 _SET = f"{_BASE}/setWebhook"
 _DELETE = f"{_BASE}/deleteWebhook"
-_INFO = f"{_BASE}/getWebhookInfo"
 _WEBHOOK_URL = f"https://agente.exemplo/webhook/telegram/{_SECRET}"
-
-
-def _info(url: str) -> dict[str, object]:
-    return {"ok": True, "result": {"url": url, "pending_update_count": 0}}
 
 
 @pytest.fixture
@@ -100,32 +95,6 @@ async def test_delete_webhook_repassa_drop_pending_updates(
     assert json.loads(route.calls.last.request.content) == {
         "drop_pending_updates": drop
     }
-
-
-async def test_get_webhook_info_mascara_o_segredo_na_url(
-    bot_api: TelegramBotApi,
-) -> None:
-    with respx.mock:
-        respx.post(_INFO).mock(
-            return_value=httpx.Response(200, json=_info(_WEBHOOK_URL))
-        )
-        info = await bot_api.get_webhook_info(_BOT_TOKEN)
-
-    assert info == {
-        "url": "https://agente.exemplo/webhook/telegram/***",
-        "pending_update_count": 0,
-    }
-    assert _SECRET not in json.dumps(info)
-
-
-async def test_get_webhook_info_sem_webhook_devolve_url_vazia(
-    bot_api: TelegramBotApi,
-) -> None:
-    with respx.mock:
-        respx.post(_INFO).mock(return_value=httpx.Response(200, json=_info("")))
-        info = await bot_api.get_webhook_info(_BOT_TOKEN)
-
-    assert info["url"] == ""
 
 
 _FAILURES = [

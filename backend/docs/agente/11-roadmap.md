@@ -10,7 +10,7 @@ Ordem pensada para que cada etapa seja verificável sozinha, antes de a próxima
 ## Etapa 2 — Sessão no AgendaBot
 `http_client.py`, `session_issuer.py`, `SyntheticPhoneResolver`, `session_cache.py`,
 `BookingSessionProvider` e o `scripts/agent/smoke_mcp.py` (só a parte da sessão).
-**Pronto quando:** o script emite um `session_token` real do estabelecimento fixo.
+**Pronto quando:** o script emite um `session_token` real do estabelecimento.
 
 ## Etapa 3 — Tools MCP
 `tool_provider.py` com `langchain-mcp-adapters`; `smoke_mcp.py` completo.
@@ -23,7 +23,9 @@ checkpointer Redis, `trim_history`.
 
 ## Etapa 5 — Telegram
 `update_parser.py`, `client.py`, `formatting.py`, rotas, comandos, `container.py`,
-`main.py`, `scripts/agent/set_webhook.py`.
+`main.py`. O webhook é um por estabelecimento
+(`/webhook/telegram/{establishment_id}`), registrado pelo módulo `channels` ao conectar
+o bot.
 **Pronto quando:** uma conversa real no Telegram marca, consulta, reagenda e cancela.
 
 ## Etapa 6 — Robustez
@@ -35,6 +37,5 @@ CI, teste de arquitetura.
 ## Depois (não nesta fase)
 1. Identidade real via `request_contact` — troca só o adapter da porta.
 2. WhatsApp como segundo canal — novo adapter de entrada/saída, mesmo grafo.
-3. `establishment_id` por canal, para multi-estabelecimento.
-4. Observabilidade do LLM (LangSmith ou equivalente).
-5. Debounce de mensagens em rajada, agrupando um turno por cliente.
+3. Observabilidade do LLM (LangSmith ou equivalente).
+4. Debounce de mensagens em rajada, agrupando um turno por cliente.

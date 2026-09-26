@@ -8,12 +8,13 @@ do agente começa com `AGENT_`, para não colidir com as do backend no mesmo arq
 
 A configuração é dividida em grupos aninhados (`agendabot`, `telegram`, `llm`, ...).
 No ambiente, cada grupo é um prefixo separado por `__`: a URL do MCP é
-`AGENT_AGENDABOT__MCP_URL`, o token do bot é `AGENT_TELEGRAM__BOT_TOKEN`, e assim
-por diante.
+`AGENT_AGENDABOT__MCP_URL`, o modelo é `AGENT_LLM__MODEL`, e assim por diante.
+
+Nada aqui identifica um estabelecimento ou um bot: o agente descobre o bot de cada
+estabelecimento pelo banco (`adapters/channels/telegram_directory.py`).
 """
 
 from typing import Literal, Self
-from uuid import UUID
 
 from pydantic import BaseModel, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -25,20 +26,14 @@ class AgendaBotSettings(BaseModel):
     """Acesso ao MCP do AgendaBot. Prefixo `AGENT_AGENDABOT__`."""
 
     mcp_url: str
-    establishment_id: UUID
-    establishment_timezone: str = "America/Sao_Paulo"
 
 
 class TelegramSettings(BaseModel):
-    """Credenciais e endpoint do canal Telegram. Prefixo `AGENT_TELEGRAM__`.
+    """Endpoint da Bot API. Prefixo `AGENT_TELEGRAM__`.
 
-    `admin_token` protege as rotas administrativas (`/admin/telegram/webhook`),
-    que registram e consultam o webhook direto na Bot API.
+    Token e segredo de cada bot ficam no banco, cifrados (módulo `channels`).
     """
 
-    bot_token: SecretStr
-    webhook_secret: SecretStr
-    admin_token: SecretStr
     api_root: str = "https://api.telegram.org"
 
 
@@ -115,8 +110,8 @@ class Settings(BaseSettings):
     )
 
     agendabot: AgendaBotSettings
-    telegram: TelegramSettings
     redis: RedisSettings
+    telegram: TelegramSettings = TelegramSettings()
     llm: LLMSettings = LLMSettings()
     conversation: ConversationSettings = ConversationSettings()
     identity: IdentitySettings = IdentitySettings()

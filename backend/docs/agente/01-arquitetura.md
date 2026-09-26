@@ -98,9 +98,8 @@ agente-agenda/
 │           ├── app.py                # create_app(): FastAPI + lifespan
 │           ├── dependencies.py       # injeta o container nos endpoints
 │           └── routes/
-│               ├── admin.py          # /admin/telegram/webhook (Bearer)
 │               ├── health.py
-│               └── telegram.py       # POST /webhook/telegram/{secret}
+│               └── telegram.py       # POST /webhook/telegram/{establishment_id}
 └── tests/
     ├── domain/
     ├── application/
@@ -131,5 +130,5 @@ falha se a tabela acima for violada.
 | Tool MCP | `tool_provider.py` / nó de tools | devolvido ao LLM como texto, não levanta |
 | Redis fora | `redis/*` | `ConversationStateError` |
 | API do Telegram | `telegram/client.py` | `DeliveryError` |
-| `setWebhook` / `getWebhookInfo` | `channels/adapters/telegram/bot_api.py` (`InvalidBotTokenError` / `TelegramApiError`, traduzidos no `container.py`) | `WebhookRegistrationError` (→ `502` em `routes/admin.py`) |
+| Banco fora ao buscar o bot | `channels/telegram_directory.py` | `ChannelLookupError` (→ `503` em `routes/telegram.py`; `DeliveryError` no envio) |
 | LLM | `agent/runner.py` | `AgentUnavailableError` |

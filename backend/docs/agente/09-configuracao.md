@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     )
 
     agendabot: AgendaBotSettings
-    telegram: TelegramSettings
     redis: RedisSettings
+    telegram: TelegramSettings = TelegramSettings()
     llm: LLMSettings = LLMSettings()
     conversation: ConversationSettings = ConversationSettings()
     identity: IdentitySettings = IdentitySettings()
@@ -25,11 +25,6 @@ class Settings(BaseSettings):
 | Variável | Tipo | Default | Uso |
 | --- | --- | --- | --- |
 | `AGENT_AGENDABOT__MCP_URL` | str | — | endpoint MCP |
-| `AGENT_AGENDABOT__ESTABLISHMENT_ID` | `UUID` | — | fixo nesta fase |
-| `AGENT_AGENDABOT__ESTABLISHMENT_TIMEZONE` | str | `America/Sao_Paulo` | data/hora do prompt |
-| `AGENT_TELEGRAM__BOT_TOKEN` | `SecretStr` | — | Bot API |
-| `AGENT_TELEGRAM__WEBHOOK_SECRET` | `SecretStr` | — | path secreto do webhook |
-| `AGENT_TELEGRAM__ADMIN_TOKEN` | `SecretStr` | — | Bearer das rotas `/admin/telegram/webhook` |
 | `AGENT_TELEGRAM__API_ROOT` | str | `https://api.telegram.org` | raiz da Bot API (Local Bot API Server / testes) |
 | `AGENT_REDIS__URL` | str | — | checkpointer + cache |
 | `AGENT_LLM__PROVIDER` | `Literal["anthropic","openai","groq"]` | `anthropic` | provider |
@@ -49,6 +44,11 @@ class Settings(BaseSettings):
 | `AGENT_HTTP__TELEGRAM_READ_TIMEOUT_SECONDS` | float | `5.0` | read/write/pool da Bot API do Telegram |
 | `AGENT_HTTP__MCP_TIMEOUT_SECONDS` | float | `15.0` | carregamento e execução de tools |
 | `AGENT_OBSERVABILITY__LOG_LEVEL` | str | `INFO` | logging |
+
+Nada aqui identifica estabelecimento ou bot: token, segredo do webhook e fuso de cada
+estabelecimento vêm do banco, pelo diretório de canais
+(`adapters/channels/telegram_directory.py`). O bot é conectado pelo painel ou por
+`PUT /api/establishments/{id}/channels/telegram`, que também registra o webhook.
 
 Um `model_validator` garante que a API key do provider selecionado existe — falhar no
 boot é melhor que falhar no primeiro cliente.
@@ -120,17 +120,14 @@ uv run uvicorn app.main_agent:app --reload --port 8080
 ```
 
 Webhook em desenvolvimento: túnel HTTPS (`cloudflared tunnel --url http://localhost:8080`)
-e registro no Telegram:
+em `TELEGRAM_WEBHOOK_BASE_URL` e o bot conectado ao estabelecimento pela API do backend
+(`PUT /api/establishments/{id}/channels/telegram`), que faz o `setWebhook` em
+`{TELEGRAM_WEBHOOK_BASE_URL}/webhook/telegram/{establishment_id}`. Trocou a URL do
+túnel: conectar de novo.
 
-```bash
-curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
-  -d "url=https://<tunel>/webhook/telegram/$TELEGRAM_WEBHOOK_SECRET" \
-  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET"
-```
-
-Um script `scripts/agent/set_webhook.py` faz isso lendo o `.env`, e `scripts/agent/delete_webhook.py`
-desfaz. Com a API de pé, o mesmo registro pode ser feito pela rota administrativa
-(seção 9.7).
+Sem Telegram, `scripts/agent/repl.py --establishment-id <uuid>` conversa com o agente
+no terminal e `scripts/agent/smoke_mcp.py --establishment-id <uuid>` confere a sessão e
+as tools. Os dois exigem o estabelecimento com bot conectado (o fuso vem do diretório).
 
 Como alternativa, a stack inteira (nginx + api + redis) sobe pelo compose, que em
 desenvolvimento constrói a imagem local e publica a porta `8080` no nginx:
@@ -169,9 +166,8 @@ docker compose up --build
 - Logs em JSON no stdout, com `thread_id` em todo registro do turno. O telefone
   sintético e o `session_token` **nunca** são logados.
 
-- O deploy **não** registra o webhook do Telegram: o Telegram guarda a URL do lado
-  dele, então o registro é um passo único de *bootstrap* (seção 9.7), refeito só se
-  o domínio ou o `AGENT_TELEGRAM__WEBHOOK_SECRET` mudarem.
+- O deploy **não** registra webhook: quem registra é o `channels` do backend, ao
+  conectar o bot de cada estabelecimento.
 
 ### 9.5.1 Pipeline de deploy (GitHub Actions)
 
@@ -212,8 +208,7 @@ docker network create web            # rede do proxy de borda que termina o TLS
 cp .env.example /opt/agente-agenda/.env   # preencher; AGENT_REDIS__URL=redis://redis:6379/0
 ```
 
-O deploy falha cedo se faltar o `.env` ou a rede `web`. Depois do primeiro deploy
-verde, registrar o webhook uma vez via `POST /admin/telegram/webhook` (seção 9.7).
+O deploy falha cedo se faltar o `.env` ou a rede `web`.
 
 ## 9.6 Política de retry e timeout por adapter
 
@@ -227,7 +222,7 @@ comportamento de um adapter, atualiza aqui.
 | Tools MCP | `mcp_client/tool_provider.py` | — (timeout total) | `AGENT_HTTP__MCP_TIMEOUT_SECONDS` (15 s), `asyncio.timeout` | **nenhum** — handshake MCP não é comprovadamente idempotente | — | `BookingSessionError` |
 | Envio ao Telegram (`sendMessage`) | `telegram/client.py` | `AGENT_HTTP__CONNECT_TIMEOUT_SECONDS` (5 s) | `AGENT_HTTP__TELEGRAM_READ_TIMEOUT_SECONDS` (5 s) | 1 vez **só** em `ConnectError` / `ConnectTimeout`; `429` respeita `retry_after` e tenta 1 vez | falha ao abrir a conexão (request não saiu) | `DeliveryError` |
 | `sendChatAction` (digitando) | `telegram/client.py` | idem | idem | nenhum | — | engolido (log em `debug`) |
-| `setWebhook` / `getWebhookInfo` | `channels/adapters/telegram/bot_api.py` | 5 s (fixo em `build_bot_api_client`) | 10 s (fixo) | nenhum — operação manual, quem chamou repete | — | `WebhookRegistrationError` (`502` na rota `/admin`) |
+| Diretório de canais | `channels/telegram_directory.py` | — (no processo, direto no banco) | — | nenhum | — | `ChannelLookupError` (`503` no webhook, para o Telegram reenviar; `DeliveryError` no envio) |
 | Checkpointer (histórico) | `redis/checkpointer.py` | — | — | nenhum | — | `ConversationStateError` (turno cai de forma visível) |
 | Cache de sessão | `redis/session_cache.py` | — | — | nenhum | — | engolido: `get` → `None`, `put` no-op, log em `warning`; o provider reemite |
 | Grafo do agente | `agent/runner.py` | — | — | `recursion_limit` = `MAX_AGENT_STEPS * 2 + 1` | os ciclos do próprio grafo | `AgentUnavailableError` (também para qualquer falha do LLM) |
@@ -236,36 +231,3 @@ Regra por trás do quadro: só se repete o que é seguramente reentrante. Emitir
 sessão é (o caso de uso resolve o cliente pelo telefone); `sendMessage` **não** é
 depois que o request parte — repetir ali duplicaria a mensagem, então só um erro
 de conexão (que garante que nada saiu) é repetível.
-
-## 9.7 Rotas administrativas: webhook do Telegram
-
-O Telegram precisa saber para onde mandar os updates (`setWebhook`), e guarda essa
-URL do lado dele. Registrar é, portanto, um passo **único** por ambiente — não faz
-parte do deploy. Depois do primeiro deploy (e sempre que o domínio ou o
-`AGENT_TELEGRAM__WEBHOOK_SECRET` mudarem), o operador chama a rota administrativa uma vez.
-
-| Rota | Faz |
-| --- | --- |
-| `POST /admin/telegram/webhook` | `setWebhook` em `{base_url}/webhook/telegram/{AGENT_TELEGRAM__WEBHOOK_SECRET}` (com `secret_token`, `allowed_updates: ["message"]`) e devolve o `getWebhookInfo` resultante |
-| `GET /admin/telegram/webhook` | `getWebhookInfo`, consultado direto do Telegram |
-
-As duas exigem `Authorization: Bearer <AGENT_TELEGRAM__ADMIN_TOKEN>` (`401` sem ele, com a
-comparação em tempo constante). Nada é persistido pela API: a fonte da verdade é o
-Telegram. O segredo do webhook faz parte da URL registrada e volta mascarado (`***`)
-nas respostas. `base_url` precisa ser HTTPS (`422` caso contrário) e uma recusa do
-Telegram vira `502` com a `description` original.
-
-```bash
-curl -X POST https://agente.exemplo/admin/telegram/webhook \
-  -H "Authorization: Bearer $TELEGRAM_ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"base_url": "https://agente.exemplo"}'
-# opcional: "drop_pending_updates": true descarta os updates acumulados na fila
-
-curl https://agente.exemplo/admin/telegram/webhook \
-  -H "Authorization: Bearer $TELEGRAM_ADMIN_TOKEN"
-```
-
-Em desenvolvimento, `scripts/agent/set_webhook.py` faz o mesmo `setWebhook` sem passar pela
-API (usa o mesmo `TelegramBotApi` do módulo `channels`), o que serve para túneis efêmeros antes
-de a aplicação subir.

@@ -34,10 +34,6 @@ class DeliveryError(AgentError):
     """A resposta não pôde ser entregue ao canal."""
 
 
-class WebhookRegistrationError(AgentError):
-    """O canal recusou registrar ou informar o webhook."""
-
-
 class ChannelLookupError(AgentError):
     """Não foi possível consultar qual canal atende o estabelecimento."""
 

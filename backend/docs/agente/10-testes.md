@@ -55,7 +55,13 @@ provider.
 ### Telegram
 - `parse_update` devolve `None` para: update sem `message`, sem `text`,
   `edited_message`, mensagem de bot, chat de grupo.
-- Webhook com `secret_path` errado → 404.
+- Webhook: id que não é UUID, estabelecimento sem bot, header ausente, errado ou com o
+  segredo de **outro** bot → 404; diretório fora → 503; nenhum dos dois agenda
+  processamento.
+- `TelegramMessenger`: cada conversa sai pelo bot do seu estabelecimento; bot ausente →
+  `DeliveryError`; nenhum erro carrega o token.
+- De ponta a ponta no handler: o mesmo `chat_id` em dois bots gera threads e sessões
+  separadas, e cada resposta sai pelo bot certo.
 - Webhook responde 200 antes de o processamento terminar.
 - `split_for_telegram` respeita 4096 e não corta palavra no meio.
 - `to_telegram_text` remove `**` e `##` e colapsa linhas em branco.

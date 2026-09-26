@@ -20,13 +20,17 @@ from app.modules.agent.application.use_cases.handle_incoming_message import (
     HandleIncomingMessage,
 )
 from app.modules.agent.application.use_cases.reset_conversation import ResetConversation
-from app.modules.agent.domain.entities import ConversationRef, IncomingMessage
+from app.modules.agent.domain.entities import (
+    ConversationRef,
+    Establishment,
+    IncomingMessage,
+)
 from app.modules.agent.domain.exceptions import AgentError
 from app.modules.agent.logging_config import bind_thread_id
 
 logger = logging.getLogger(__name__)
 
-ParseUpdate = Callable[[Mapping[str, Any]], IncomingMessage | None]
+ParseUpdate = Callable[[Mapping[str, Any], Establishment], IncomingMessage | None]
 
 _FAILURE_MSG = "Falha ao processar um update do Telegram"
 
@@ -47,9 +51,14 @@ class TelegramWebhookHandler:
         self._reset_conversation = reset_conversation
         self._messenger = messenger
 
-    async def handle_update(self, payload: Mapping[str, Any]) -> None:
-        """Trata um update do webhook. Nunca levanta: o webhook já respondeu `200`."""
-        parsed = self._parse(payload)
+    async def handle_update(
+        self, establishment: Establishment, payload: Mapping[str, Any]
+    ) -> None:
+        """Trata um update do bot do `establishment`.
+
+        Nunca levanta: o webhook já respondeu `200`.
+        """
+        parsed = self._parse(establishment, payload)
         if parsed is None:
             return
         message, ref = parsed
@@ -64,12 +73,13 @@ class TelegramWebhookHandler:
 
     def _parse(
         self,
+        establishment: Establishment,
         payload: Mapping[str, Any],
     ) -> tuple[IncomingMessage, ConversationRef] | None:
         """Extrai a mensagem e o `ConversationRef` do update, ou `None` se não houver
         mensagem tratável. Nunca levanta: registra a falha e devolve `None`."""
         try:
-            message = self._parse_update(payload)
+            message = self._parse_update(payload, establishment)
             if message is None:
                 return None
             ref = message.conversation

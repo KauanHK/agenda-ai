@@ -5,15 +5,9 @@ from pydantic import ValidationError
 
 from app.modules.agent.settings import Settings
 
-_ESTABLISHMENT_ID = "01a04f5b-0e84-7530-be67-63f08e7b2269"
-
 # Tudo que não tem default e precisa vir do ambiente.
 _REQUIRED = {
     "AGENT_AGENDABOT__MCP_URL": "https://agenda.escaleia.cloud/mcp",
-    "AGENT_AGENDABOT__ESTABLISHMENT_ID": _ESTABLISHMENT_ID,
-    "AGENT_TELEGRAM__BOT_TOKEN": "tg-token",
-    "AGENT_TELEGRAM__WEBHOOK_SECRET": "hook-secret",
-    "AGENT_TELEGRAM__ADMIN_TOKEN": "admin-token",
     "AGENT_REDIS__URL": "redis://localhost:6379/1",
 }
 
@@ -42,8 +36,7 @@ def test_defaults_valem_quando_so_os_obrigatorios_estao_definidos(
     assert settings.llm.provider == "anthropic"
     assert settings.llm.model == "claude-sonnet-5"
     assert settings.llm.temperature == pytest.approx(0.3)
-    assert str(settings.agendabot.establishment_id) == _ESTABLISHMENT_ID
-    assert settings.telegram.bot_token.get_secret_value() == "tg-token"
+    assert settings.telegram.api_root == "https://api.telegram.org"
     assert settings.conversation.max_history_turns == 10
     assert settings.http.connect_timeout_seconds == pytest.approx(5.0)
     assert settings.http.telegram_read_timeout_seconds == pytest.approx(5.0)

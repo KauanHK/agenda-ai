@@ -4,20 +4,22 @@ Roda contra o ambiente real, lendo as credenciais do `.env`. Não faz parte da
 suíte automatizada: é o que responde "o contrato mudou?" sem mock.
 
 Faz o caminho inteiro da sessão: emite um `session_token` real do estabelecimento
-fixo, abre a conexão MCP autenticada com esse token e lista as tools publicadas
+dado (que precisa ter um bot conectado, porque é resolvido pelo diretório de canais),
+abre a conexão MCP autenticada com esse token e lista as tools publicadas
 pelo servidor, com seus schemas de argumentos.
 
 Uso:
 
-    uv run python -m scripts.agent.smoke_mcp
-    uv run python -m scripts.agent.smoke_mcp --chat-id 12345 --name "Kauan"
-    uv run python -m scripts.agent.smoke_mcp --phone 554792277579 --show-token
-    uv run python -m scripts.agent.smoke_mcp --full-schema
+    uv run python -m scripts.agent.smoke_mcp --establishment-id <uuid>
+    uv run python -m scripts.agent.smoke_mcp --establishment-id <uuid> --chat-id 12345
+    uv run python -m scripts.agent.smoke_mcp --establishment-id <uuid> --phone 554792277579
+    uv run python -m scripts.agent.smoke_mcp --establishment-id <uuid> --full-schema
 """
 
 import argparse
 import asyncio
 import json
+import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
@@ -26,6 +28,9 @@ from pydantic import ValidationError
 
 from app.core.db.session import db
 from app.modules.agent.adapters.booking.session_issuer import InProcessSessionIssuer
+from app.modules.agent.adapters.channels.telegram_directory import (
+    DbTelegramChannelDirectory,
+)
 from app.modules.agent.adapters.identity.synthetic_phone import SyntheticPhoneResolver
 from app.modules.agent.adapters.mcp_client.tool_provider import AgendaBotToolProvider
 from app.modules.agent.domain.entities import Channel
@@ -36,6 +41,12 @@ from app.modules.agent.settings import Settings
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Emite uma sessão real no AgendaBot e lista as tools do MCP."
+    )
+    parser.add_argument(
+        "--establishment-id",
+        type=uuid.UUID,
+        required=True,
+        help="estabelecimento da sessão (precisa ter um bot conectado)",
     )
     parser.add_argument(
         "--chat-id",
@@ -107,19 +118,22 @@ async def _run(args: argparse.Namespace, settings: Settings) -> None:
         resolver = SyntheticPhoneResolver(settings.identity.synthetic_phone_prefix)
         phone = resolver.resolve(Channel.TELEGRAM, str(args.chat_id))
 
-    print(f"Estabelecimento : {settings.agendabot.establishment_id}")
-    print(f"MCP             : {settings.agendabot.mcp_url}")
-    print(f"Telefone        : {phone}")
-    print(f"Nome            : {args.name}")
-    print("Emitindo sessão...\n")
-
-    issuer = InProcessSessionIssuer(
-        establishment_id=settings.agendabot.establishment_id,
-        clock=lambda: datetime.now(UTC),
-    )
     db.init()
     try:
-        session = await issuer.issue(phone, str(args.name))
+        channel = await DbTelegramChannelDirectory().get(args.establishment_id)
+        if channel is None:
+            print(f"O estabelecimento {args.establishment_id} não tem bot conectado.")
+            return
+        establishment = channel.establishment
+
+        print(f"Estabelecimento : {establishment.id} ({establishment.timezone})")
+        print(f"MCP             : {settings.agendabot.mcp_url}")
+        print(f"Telefone        : {phone}")
+        print(f"Nome            : {args.name}")
+        print("Emitindo sessão...\n")
+
+        issuer = InProcessSessionIssuer(clock=lambda: datetime.now(UTC))
+        session = await issuer.issue(establishment.id, phone, str(args.name))
     finally:
         await db.close()
 

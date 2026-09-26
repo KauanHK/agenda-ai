@@ -3,6 +3,7 @@
 import json
 import uuid
 from collections.abc import AsyncIterator
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -13,31 +14,65 @@ from app.modules.agent.adapters.telegram.client import (
     build_telegram_client,
 )
 from app.modules.agent.adapters.telegram.formatting import TELEGRAM_MAX_CHARS
-from app.modules.agent.domain.entities import Channel, ConversationRef
+from app.modules.agent.domain.entities import (
+    Channel,
+    ConversationRef,
+    Establishment,
+    TelegramChannel,
+)
 from app.modules.agent.domain.exceptions import DeliveryError
+from tests.modules.agent.fakes.channel_directory import FakeChannelDirectory
 
 _BOT_TOKEN = "123456:segredo-do-bot"
 _BASE = f"https://api.telegram.org/bot{_BOT_TOKEN}"
 _SEND = f"{_BASE}/sendMessage"
 _ACTION = f"{_BASE}/sendChatAction"
 
+_OTHER_TOKEN = "654321:outro-bot"
+_OTHER_SEND = f"https://api.telegram.org/bot{_OTHER_TOKEN}/sendMessage"
+
+
+def _channel(establishment_id: str, bot_token: str) -> TelegramChannel:
+    return TelegramChannel(
+        establishment=Establishment(
+            id=uuid.UUID(establishment_id), timezone=ZoneInfo("America/Sao_Paulo")
+        ),
+        bot_token=bot_token,
+        webhook_secret="segredo",
+    )
+
+
+_CHANNEL = _channel("01a04f64-0000-7000-8000-00000000e001", _BOT_TOKEN)
+_OTHER_CHANNEL = _channel("01a04f64-0000-7000-8000-00000000e002", _OTHER_TOKEN)
+
 _REF = ConversationRef(
     channel=Channel.TELEGRAM,
-    establishment_id=uuid.UUID("01a04f64-0000-7000-8000-00000000e001"),
+    establishment_id=_CHANNEL.establishment.id,
+    channel_user_id="42",
+)
+_OTHER_REF = ConversationRef(
+    channel=Channel.TELEGRAM,
+    establishment_id=_OTHER_CHANNEL.establishment.id,
     channel_user_id="42",
 )
 
 
 @pytest.fixture
-async def messenger() -> AsyncIterator[TelegramMessenger]:
+def directory() -> FakeChannelDirectory:
+    return FakeChannelDirectory(_CHANNEL, _OTHER_CHANNEL)
+
+
+@pytest.fixture
+async def messenger(
+    directory: FakeChannelDirectory,
+) -> AsyncIterator[TelegramMessenger]:
     client = build_telegram_client(
         api_root="https://api.telegram.org",
-        bot_token=_BOT_TOKEN,
         connect_timeout_seconds=5.0,
         read_timeout_seconds=5.0,
     )
     async with client:
-        yield TelegramMessenger(client, connect_retry_delay_seconds=0.0)
+        yield TelegramMessenger(client, directory, connect_retry_delay_seconds=0.0)
 
 
 async def test_send_text_faz_sendmessage_com_chat_id_e_texto(
@@ -160,3 +195,61 @@ async def test_signal_typing_manda_action_typing(messenger: TelegramMessenger) -
         await messenger.signal_typing(_REF)
 
     assert json.loads(route.calls.last.request.content) == {"chat_id": "42", "action": "typing"}
+
+
+async def test_cada_conversa_sai_pelo_bot_do_seu_estabelecimento(
+    messenger: TelegramMessenger,
+) -> None:
+    with respx.mock:
+        route_a = respx.post(_SEND).mock(return_value=httpx.Response(200, json={"ok": True}))
+        route_b = respx.post(_OTHER_SEND).mock(
+            return_value=httpx.Response(200, json={"ok": True})
+        )
+        await messenger.send_text(_REF, "para o A")
+        await messenger.send_text(_OTHER_REF, "para o B")
+
+    assert [json.loads(c.request.content)["text"] for c in route_a.calls] == ["para o A"]
+    assert [json.loads(c.request.content)["text"] for c in route_b.calls] == ["para o B"]
+
+
+async def test_bot_desconectado_no_meio_do_turno_vira_delivery_error(
+    messenger: TelegramMessenger, directory: FakeChannelDirectory
+) -> None:
+    del directory.channels[_CHANNEL.establishment.id]
+
+    # Sem rota no respx: qualquer chamada ao Telegram falharia o teste.
+    with respx.mock, pytest.raises(DeliveryError):
+        await messenger.send_text(_REF, "oi")
+
+
+async def test_diretorio_fora_vira_delivery_error(
+    messenger: TelegramMessenger, directory: FakeChannelDirectory
+) -> None:
+    directory.fail = True
+
+    with respx.mock, pytest.raises(DeliveryError) as exc_info:
+        await messenger.send_text(_REF, "oi")
+
+    assert exc_info.value.__cause__ is None
+
+
+async def test_erro_http_nao_carrega_o_token(messenger: TelegramMessenger) -> None:
+    with respx.mock:
+        respx.post(_SEND).mock(return_value=httpx.Response(400, json={"ok": False}))
+        with pytest.raises(DeliveryError) as exc_info:
+            await messenger.send_text(_REF, "oi")
+
+    assert _BOT_TOKEN not in str(exc_info.value)
+    assert exc_info.value.__cause__ is None
+
+
+async def test_signal_typing_sem_bot_ou_com_diretorio_fora_nao_levanta(
+    messenger: TelegramMessenger, directory: FakeChannelDirectory
+) -> None:
+    del directory.channels[_CHANNEL.establishment.id]
+    with respx.mock:
+        await messenger.signal_typing(_REF)
+
+    directory.fail = True
+    with respx.mock:
+        await messenger.signal_typing(_OTHER_REF)

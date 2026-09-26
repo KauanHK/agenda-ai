@@ -76,7 +76,7 @@ def _handler(
     reset = reset or _StubReset()
     messenger = messenger or FakeMessenger()
     handler = TelegramWebhookHandler(
-        parse_update=lambda _payload: parsed,
+        parse_update=lambda _payload, _establishment: parsed,
         handle_incoming_message=incoming,  # type: ignore[arg-type]
         reset_conversation=reset,  # type: ignore[arg-type]
         messenger=messenger,
@@ -87,7 +87,7 @@ def _handler(
 async def test_mensagem_normal_vai_para_o_agente() -> None:
     handler, incoming, reset, messenger = _handler(parsed=_message("quero marcar"))
 
-    await handler.handle_update({"update_id": 1})
+    await handler.handle_update(_ESTABLISHMENT, {"update_id": 1})
 
     assert [m.text for m in incoming.handled] == ["quero marcar"]
     assert reset.calls == []
@@ -97,7 +97,7 @@ async def test_mensagem_normal_vai_para_o_agente() -> None:
 async def test_start_reseta_e_manda_boas_vindas() -> None:
     handler, incoming, reset, messenger = _handler(parsed=_message("/start"))
 
-    await handler.handle_update({"update_id": 1})
+    await handler.handle_update(_ESTABLISHMENT, {"update_id": 1})
 
     assert len(reset.calls) == 1
     assert reset.calls == [_REF]
@@ -108,7 +108,7 @@ async def test_start_reseta_e_manda_boas_vindas() -> None:
 async def test_reset_reseta_e_confirma() -> None:
     handler, _incoming, reset, messenger = _handler(parsed=_message("/reset"))
 
-    await handler.handle_update({"update_id": 1})
+    await handler.handle_update(_ESTABLISHMENT, {"update_id": 1})
 
     assert len(reset.calls) == 1
     assert messenger.sent == [(_REF, RESET_MESSAGE)]
@@ -117,7 +117,7 @@ async def test_reset_reseta_e_confirma() -> None:
 async def test_comando_desconhecido_vai_para_o_agente() -> None:
     handler, incoming, reset, _messenger = _handler(parsed=_message("/ajuda por favor"))
 
-    await handler.handle_update({"update_id": 1})
+    await handler.handle_update(_ESTABLISHMENT, {"update_id": 1})
 
     assert [m.text for m in incoming.handled] == ["/ajuda por favor"]
     assert reset.calls == []
@@ -126,7 +126,7 @@ async def test_comando_desconhecido_vai_para_o_agente() -> None:
 async def test_update_ignorado_nao_faz_nada() -> None:
     handler, incoming, reset, messenger = _handler(parsed=None)
 
-    await handler.handle_update({"update_id": 1})
+    await handler.handle_update(_ESTABLISHMENT, {"update_id": 1})
 
     assert incoming.handled == []
     assert reset.calls == []
@@ -137,7 +137,7 @@ async def test_falha_no_reset_responde_ao_cliente_sem_boas_vindas() -> None:
     reset = _StubReset(error=ConversationStateError("Redis fora"))
     handler, _incoming, _reset, messenger = _handler(parsed=_message("/reset"), reset=reset)
 
-    await handler.handle_update({"update_id": 1})
+    await handler.handle_update(_ESTABLISHMENT, {"update_id": 1})
 
     assert messenger.sent == [(_REF, ConversationStateError.user_message)]
 
@@ -164,13 +164,13 @@ async def test_falha_no_turno_loga_thread_id_sem_telefone(json_logs: io.StringIO
             raise RuntimeError("o agente explodiu")
 
     handler = TelegramWebhookHandler(
-        parse_update=lambda _payload: _message("quero marcar"),
+        parse_update=lambda _payload, _establishment: _message("quero marcar"),
         handle_incoming_message=_Boom(),  # type: ignore[arg-type]
         reset_conversation=_StubReset(),  # type: ignore[arg-type]
         messenger=FakeMessenger(),
     )
 
-    await handler.handle_update({"update_id": 1})
+    await handler.handle_update(_ESTABLISHMENT, {"update_id": 1})
 
     records = [json.loads(line) for line in json_logs.getvalue().splitlines()]
     assert records, "esperava ao menos um registro"
@@ -181,7 +181,7 @@ async def test_falha_no_turno_loga_thread_id_sem_telefone(json_logs: io.StringIO
 
 
 async def test_handle_update_nunca_levanta() -> None:
-    def _boom(_payload: Any) -> None:
+    def _boom(_payload: Any, _establishment: Any) -> None:
         raise RuntimeError("parser explodiu")
 
     handler = TelegramWebhookHandler(
@@ -191,4 +191,4 @@ async def test_handle_update_nunca_levanta() -> None:
         messenger=FakeMessenger(),
     )
 
-    await handler.handle_update({"update_id": 1})  # não levanta
+    await handler.handle_update(_ESTABLISHMENT, {"update_id": 1})  # não levanta

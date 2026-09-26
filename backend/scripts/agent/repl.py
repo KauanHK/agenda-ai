@@ -8,9 +8,11 @@ Roda à mão, contra o ambiente real, lendo o `.env`. Não faz parte da suíte.
 
 Uso:
 
-    uv run python -m scripts.agent.repl
-    uv run python -m scripts.agent.repl --chat-id 12345 --name "Kauan"
-    uv run python -m scripts.agent.repl --memory      # checkpointer e cache sem Redis
+    uv run python -m scripts.agent.repl --establishment-id <uuid>
+    uv run python -m scripts.agent.repl --establishment-id <uuid> --chat-id 12345 --name "Kauan"
+    uv run python -m scripts.agent.repl --establishment-id <uuid> --memory  # sem Redis
+
+O estabelecimento precisa ter um bot conectado: o fuso vem do diretório de canais.
 
 A conversa fica presa a `--chat-id`: para recomeçar do zero, rode com outra.
 `/sair` (ou Ctrl-D) encerra.
@@ -19,10 +21,10 @@ A conversa fica presa a `--chat-id`: para recomeçar do zero, rode com outra.
 import argparse
 import asyncio
 import contextlib
+import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import InMemorySaver
@@ -30,6 +32,9 @@ from pydantic import ValidationError
 
 from app.core.db.session import db
 from app.modules.agent.adapters.booking.session_issuer import InProcessSessionIssuer
+from app.modules.agent.adapters.channels.telegram_directory import (
+    DbTelegramChannelDirectory,
+)
 from app.modules.agent.adapters.identity.synthetic_phone import SyntheticPhoneResolver
 from app.modules.agent.adapters.langgraph.graph import build_graph
 from app.modules.agent.adapters.langgraph.runner import LangGraphAgentRunner
@@ -48,6 +53,7 @@ from app.modules.agent.domain.entities import (
     Channel,
     Contact,
     ConversationRef,
+    Establishment,
 )
 from app.modules.agent.domain.exceptions import AgentError
 from app.modules.agent.settings import Settings
@@ -55,10 +61,20 @@ from app.modules.agent.settings import Settings
 TurnHandler = Callable[[Contact, ConversationRef, str], Awaitable[str]]
 
 
+class _NoChannelError(AgentError):
+    """O estabelecimento não tem bot conectado (ou não atende)."""
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--establishment-id",
+        type=uuid.UUID,
+        required=True,
+        help="estabelecimento atendido (precisa ter um bot conectado)",
     )
     parser.add_argument(
         "--chat-id",
@@ -81,7 +97,7 @@ def _parse_args() -> argparse.Namespace:
 class _NullSessionCache:
     """Cache que nunca guarda nada: força reemissão a cada turno. Implementa a porta."""
 
-    async def get(self, phone: str) -> BookingSession | None:
+    async def get(self, establishment_id: uuid.UUID, phone: str) -> BookingSession | None:
         return None
 
     async def put(self, session: BookingSession) -> None:
@@ -125,21 +141,25 @@ def _session_cache(
     )
 
 
+async def _establishment(establishment_id: uuid.UUID) -> Establishment:
+    """O estabelecimento com o fuso, pelo diretório de canais (exige `db.init()`)."""
+    channel = await DbTelegramChannelDirectory().get(establishment_id)
+    if channel is None:
+        raise _NoChannelError(f"O estabelecimento {establishment_id} não tem bot conectado.")
+    return channel.establishment
+
+
 async def _build_turn_handler(
     settings: Settings,
     stack: contextlib.AsyncExitStack,
+    establishment: Establishment,
     *,
     in_memory: bool,
 ) -> TurnHandler:
     """Monta as dependências reais e devolve uma função que roda um turno."""
-    db.init()
-    stack.push_async_callback(db.close)
     session_provider = BookingSessionProvider(
         phone_resolver=SyntheticPhoneResolver(settings.identity.synthetic_phone_prefix),
-        issuer=InProcessSessionIssuer(
-            establishment_id=settings.agendabot.establishment_id,
-            clock=_now_utc,
-        ),
+        issuer=InProcessSessionIssuer(clock=_now_utc),
         cache=_session_cache(settings, stack, in_memory=in_memory),
         clock=_now_utc,
         refresh_margin_seconds=settings.conversation.session_refresh_margin_seconds,
@@ -157,10 +177,8 @@ async def _build_turn_handler(
         ),
         max_agent_steps=settings.conversation.max_agent_steps,
     )
-    tz = ZoneInfo(settings.agendabot.establishment_timezone)
-
     async def handle(contact: Contact, ref: ConversationRef, text: str) -> str:
-        session = await session_provider.for_contact(contact)
+        session = await session_provider.for_contact(contact, establishment.id)
         tools = await tool_provider.tools_for(session.token)
         answer = await runner.run(
             conversation=ref,
@@ -168,7 +186,7 @@ async def _build_turn_handler(
             tools=tools,
             context=AgentContext(
                 client_name=session.client_name,
-                now=datetime.now(tz),
+                now=datetime.now(establishment.timezone),
                 is_new_client=session.is_new_client,
             ),
         )
@@ -177,9 +195,15 @@ async def _build_turn_handler(
     return handle
 
 
-async def _loop(handle: TurnHandler, args: argparse.Namespace) -> None:
+async def _loop(
+    handle: TurnHandler, establishment: Establishment, args: argparse.Namespace
+) -> None:
     chat_id = str(args.chat_id)
-    ref = ConversationRef(channel=Channel.TELEGRAM, channel_user_id=chat_id)
+    ref = ConversationRef(
+        channel=Channel.TELEGRAM,
+        establishment_id=establishment.id,
+        channel_user_id=chat_id,
+    )
     contact = Contact(
         channel=Channel.TELEGRAM,
         channel_user_id=chat_id,
@@ -211,8 +235,13 @@ async def _loop(handle: TurnHandler, args: argparse.Namespace) -> None:
 
 async def _run(args: argparse.Namespace, settings: Settings) -> None:
     async with contextlib.AsyncExitStack() as stack:
-        handle = await _build_turn_handler(settings, stack, in_memory=args.memory)
-        await _loop(handle, args)
+        db.init()
+        stack.push_async_callback(db.close)
+        establishment = await _establishment(args.establishment_id)
+        handle = await _build_turn_handler(
+            settings, stack, establishment, in_memory=args.memory
+        )
+        await _loop(handle, establishment, args)
 
 
 def main() -> int:

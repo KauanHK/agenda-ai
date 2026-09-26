@@ -6,12 +6,27 @@ Telegram é REST simples e o que precisamos são duas chamadas — usamos `httpx
 ## 7.1 Endpoint
 
 ```
-POST /webhook/telegram/{secret_path}
+POST /webhook/telegram/{establishment_id}
 ```
 
-- `secret_path` = `TELEGRAM_WEBHOOK_SECRET`, comparado com `hmac.compare_digest`.
-  Não bate → `404` (não `403`: um 403 confirma que a rota existe).
-- Valida também o header `X-Telegram-Bot-Api-Secret-Token` quando configurado.
+Cada estabelecimento tem o seu bot, conectado pelo painel (módulo `channels`), que
+registra o webhook nesta URL. O agente não administra webhook nenhum.
+
+| Situação | Resposta |
+| --- | --- |
+| `establishment_id` não é UUID | `404` |
+| O diretório de canais devolve `None` (sem bot, estabelecimento inativo ou inexistente) | `404` |
+| Header `X-Telegram-Bot-Api-Secret-Token` ausente ou diferente do segredo do bot (`hmac.compare_digest`) | `404` |
+| `ChannelLookupError` (banco fora) | `503`, para o Telegram reenviar |
+| Ok | `200 {"ok": true}` na hora |
+
+- **Sempre `404`, nunca `401`/`403`:** um `403` confirmaria que a rota existe para
+  aquele id.
+- **O header é a autenticação.** O caminho é só um UUID, que não é segredo.
+- O id chega como `str` e é convertido à mão: um `uuid.UUID` no caminho faria o
+  FastAPI responder `422`.
+- O canal é lido do banco a cada update, sem cache (`DbTelegramChannelDirectory`):
+  conectar, reconectar ou desconectar vale na hora.
 - **Responde `200` imediatamente** e processa em background
   (`asyncio.create_task` guardado em um set no `app.state`, para não ser coletado).
   O Telegram reentrega updates não respondidos em ~poucos segundos; um turno com
@@ -27,9 +42,9 @@ POST /webhook/telegram/{secret_path}
 ```python
 def parse_update(
     payload: Mapping[str, Any],
-    phone_resolver: PhoneResolverProtocol,
-    *,
     establishment: Establishment,
+    *,
+    phone_resolver: PhoneResolverProtocol,
     max_chars: int = 1000,
 ) -> IncomingMessage | None:
     """
@@ -43,10 +58,9 @@ def parse_update(
 `None` é a resposta correta, não um erro: o Telegram manda muitos tipos de update e
 ignorar em silêncio é o comportamento esperado.
 
-A mensagem sai com o `establishment` recebido. Por enquanto o container fixa no
-`parse_update` (via `functools.partial`) o único estabelecimento do env
-(`AGENT_AGENDABOT__ESTABLISHMENT_ID` e `_ESTABLISHMENT_TIMEZONE`); é o único lugar que
-ainda sabe que existe um estabelecimento só.
+A mensagem sai com o `establishment` recebido: o dono do bot que recebeu o update, que
+a rota resolveu pelo `establishment_id` do caminho e repassa ao
+`TelegramWebhookHandler.handle_update(establishment, payload)`.
 
 Campos usados:
 
@@ -91,8 +105,13 @@ class TelegramMessenger:
     async def signal_typing(self, conversation: ConversationRef) -> None: ...
 ```
 
-- `sendMessage` com `chat_id` = `conversation.channel_user_id`. Por enquanto há um bot
-  só; o `establishment_id` da conversa é o que vai escolher o bot.
+- `sendMessage` com `chat_id` = `conversation.channel_user_id`, pelo bot do
+  estabelecimento da conversa: o `TelegramMessenger` resolve o canal no diretório por
+  `conversation.establishment_id` e chama `/bot{token}/sendMessage`. O `httpx.AsyncClient`
+  só conhece a raiz da Bot API; o token entra por chamada e nunca aparece em erro
+  (`from None`) nem em log.
+- Bot desconectado no meio do turno (diretório devolve `None`) ou diretório fora →
+  `DeliveryError`.
 - Textos acima de 4096 caracteres são quebrados em pedaços por parágrafo antes do
   envio (`split_for_telegram`, função pura em `formatting.py`).
 - `429` → respeita `retry_after` do corpo e tenta uma vez; outros erros → `DeliveryError`.
@@ -101,7 +120,8 @@ class TelegramMessenger:
 - Retry de transporte **só** em `ConnectError` / `ConnectTimeout` (uma vez): aí o
   request não saiu e não há risco de mensagem duplicada. Um `ReadTimeout` /
   `WriteTimeout` — o request pode já ter chegado — vira `DeliveryError` sem repetir.
-- `signal_typing` chama `sendChatAction` com `action=typing` e engole qualquer falha.
+- `signal_typing` chama `sendChatAction` com `action=typing` e engole qualquer falha,
+  inclusive a do diretório.
 
 Quadro completo da política em
 [`09-configuracao.md`](09-configuracao.md#96-política-de-retry-e-timeout-por-adapter).
