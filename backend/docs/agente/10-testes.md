@@ -33,11 +33,11 @@ chamada errada em silêncio.
 - Sessão expirando dentro da margem → reemite.
 - Cache indisponível → reemite e segue.
 
-### `session_issuer` (com `respx`)
-- 201 → `BookingSession` com `expires_at` calculado.
-- 403 → `ClientBlockedError`; 404/401/422 → `BookingSessionError` sem retry.
-- 500 → retry e depois `BookingSessionError`.
-- A `X-Service-Key` não aparece em nenhuma mensagem de erro.
+### `session_issuer` (com UoW falso do booking)
+- Sucesso → `BookingSession` com `expires_at` calculado pelo relógio injetado.
+- Cliente inativo → `ClientBlockedError`; telefone inválido → `InvalidPhoneError`.
+- Estabelecimento indisponível, erro de banco ou de rede → `BookingSessionError`.
+- `ConflictError` → uma nova tentativa; repetido → `BookingSessionError`.
 
 ### Grafo
 - `should_continue` com e sem `tool_calls`.

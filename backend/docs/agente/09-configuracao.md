@@ -24,9 +24,7 @@ class Settings(BaseSettings):
 
 | Variável | Tipo | Default | Uso |
 | --- | --- | --- | --- |
-| `AGENT_AGENDABOT__API_URL` | str | — | base da API |
 | `AGENT_AGENDABOT__MCP_URL` | str | — | endpoint MCP |
-| `AGENT_AGENDABOT__SERVICE_KEY` | `SecretStr` | — | header `X-Service-Key` |
 | `AGENT_AGENDABOT__ESTABLISHMENT_ID` | `UUID` | — | fixo nesta fase |
 | `AGENT_AGENDABOT__ESTABLISHMENT_TIMEZONE` | str | `America/Sao_Paulo` | data/hora do prompt |
 | `AGENT_TELEGRAM__BOT_TOKEN` | `SecretStr` | — | Bot API |
@@ -47,8 +45,7 @@ class Settings(BaseSettings):
 | `AGENT_CONVERSATION__MAX_INPUT_CHARS` | int | `1000` | truncamento da mensagem do cliente |
 | `AGENT_CONVERSATION__SESSION_REFRESH_MARGIN_SECONDS` | int | `60` | margem antes de expirar |
 | `AGENT_IDENTITY__SYNTHETIC_PHONE_PREFIX` | str | `5547999` | identidade da fase 1 |
-| `AGENT_HTTP__TIMEOUT_SECONDS` | float | `10.0` | read/write/pool da API do AgendaBot |
-| `AGENT_HTTP__CONNECT_TIMEOUT_SECONDS` | float | `5.0` | abrir conexão TCP+TLS (AgendaBot e Telegram) |
+| `AGENT_HTTP__CONNECT_TIMEOUT_SECONDS` | float | `5.0` | abrir conexão TCP+TLS com o Telegram |
 | `AGENT_HTTP__TELEGRAM_READ_TIMEOUT_SECONDS` | float | `5.0` | read/write/pool da Bot API do Telegram |
 | `AGENT_HTTP__MCP_TIMEOUT_SECONDS` | float | `15.0` | carregamento e execução de tools |
 | `AGENT_OBSERVABILITY__LOG_LEVEL` | str | `INFO` | logging |
@@ -226,8 +223,8 @@ comportamento de um adapter, atualiza aqui.
 
 | Adapter | Arquivo | `connect` | `read` / `write` / `pool` | Retry | Repete o quê | Falha terminal vira |
 | --- | --- | --- | --- | --- | --- | --- |
-| Emissão de sessão | `agendabot/session_issuer.py` | `AGENT_HTTP__CONNECT_TIMEOUT_SECONDS` (5 s) | `AGENT_HTTP__TIMEOUT_SECONDS` (10 s) | até 3 tentativas, backoff exponencial de 200 ms | `ConnectError`, `TimeoutException` (connect/read/write/pool), `5xx` | `BookingSessionError` (`403` → `ClientBlockedError`; `4xx` nunca repete) |
-| Tools MCP | `agendabot/tool_provider.py` | — (timeout total) | `AGENT_HTTP__MCP_TIMEOUT_SECONDS` (15 s), `asyncio.timeout` | **nenhum** — handshake MCP não é comprovadamente idempotente | — | `BookingSessionError` |
+| Emissão de sessão | `booking/session_issuer.py` | — (no processo, direto no banco) | — | 1 nova tentativa só em `ConflictError` (cliente novo criado por duas mensagens ao mesmo tempo) | a emissão inteira, com um UoW novo | `BookingSessionError` (cliente inativo → `ClientBlockedError`; telefone inválido → `InvalidPhoneError`) |
+| Tools MCP | `mcp_client/tool_provider.py` | — (timeout total) | `AGENT_HTTP__MCP_TIMEOUT_SECONDS` (15 s), `asyncio.timeout` | **nenhum** — handshake MCP não é comprovadamente idempotente | — | `BookingSessionError` |
 | Envio ao Telegram (`sendMessage`) | `telegram/client.py` | `AGENT_HTTP__CONNECT_TIMEOUT_SECONDS` (5 s) | `AGENT_HTTP__TELEGRAM_READ_TIMEOUT_SECONDS` (5 s) | 1 vez **só** em `ConnectError` / `ConnectTimeout`; `429` respeita `retry_after` e tenta 1 vez | falha ao abrir a conexão (request não saiu) | `DeliveryError` |
 | `sendChatAction` (digitando) | `telegram/client.py` | idem | idem | nenhum | — | engolido (log em `debug`) |
 | `setWebhook` / `getWebhookInfo` | `telegram/webhook_registry.py` | idem | idem | nenhum — operação manual, quem chamou repete | — | `WebhookRegistrationError` (`502` na rota `/admin`) |
@@ -236,7 +233,7 @@ comportamento de um adapter, atualiza aqui.
 | Grafo do agente | `agent/runner.py` | — | — | `recursion_limit` = `MAX_AGENT_STEPS * 2 + 1` | os ciclos do próprio grafo | `AgentUnavailableError` (também para qualquer falha do LLM) |
 
 Regra por trás do quadro: só se repete o que é seguramente reentrante. Emitir a
-sessão é (o AgendaBot resolve o cliente pelo telefone); `sendMessage` **não** é
+sessão é (o caso de uso resolve o cliente pelo telefone); `sendMessage` **não** é
 depois que o request parte — repetir ali duplicaria a mensagem, então só um erro
 de conexão (que garante que nada saiu) é repetível.
 

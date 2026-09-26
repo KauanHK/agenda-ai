@@ -1,59 +1,28 @@
 # 05 — Integração com o AgendaBot
 
-Duas integrações distintas com o mesmo host: a **API HTTP** (emite a sessão) e o
-**MCP server** (executa as tools). São arquivos separados porque mudam por motivos
-diferentes.
+A sessão é emitida no próprio processo do agente; só as tools passam pelo **MCP
+server**, que continua sendo a fronteira de autorização.
 
 ## 5.1 Emissão da sessão
 
-`POST https://agenda.escaleia.cloud/api/agent/{establishment_id}/sessions`
+`adapters/booking/session_issuer.py` (`InProcessSessionIssuer`) chama o caso de uso
+`CustomerSessionIssuer` do módulo `booking` direto no banco — sem HTTP e sem chave de
+serviço. O cliente é criado na primeira mensagem.
 
-Headers:
-
-```
-X-Service-Key: <AGENDABOT_SERVICE_KEY>
-Content-Type: application/json
-```
-
-Body:
-
-```json
-{ "phone": "554792277579", "name": "Kauan" }
-```
-
-Resposta `201`:
-
-```json
-{
-  "session_token": "<jwt>",
-  "expires_in_minutes": 10,
-  "client": { "id": "01a04f64-...", "name": "Kauan" },
-  "is_new_client": true
-}
-```
-
-`expires_at` é calculado no adapter: `now + expires_in_minutes`. O agente **nunca**
-confia num token além disso.
+`expires_at` é calculado no adapter: `now + MCP_SESSION_TOKEN_EXPIRES_MINUTES`. O
+agente **nunca** confia num token além disso.
 
 ### Mapeamento de erro
 
-| Status | Erro de domínio | Observação |
+| Erro do backend | Erro de domínio | Observação |
 | --- | --- | --- |
-| 403 | `ClientBlockedError` | cliente inativo no estabelecimento |
-| 404 | `BookingSessionError` | estabelecimento inexistente ou inativo |
-| 401 | `BookingSessionError` | `X-Service-Key` errada — falha de configuração |
-| 409 / 422 | `BookingSessionError` | telefone inválido, corrida na criação |
-| 5xx / timeout | `BookingSessionError` | com retry (abaixo) |
+| `ForbiddenError` | `ClientBlockedError` | cliente inativo no estabelecimento |
+| `ValueError` | `InvalidPhoneError` | telefone sem dígitos suficientes |
+| `ConflictError` | `BookingSessionError` | só depois de **uma** nova tentativa (corrida na criação do cliente) |
+| `NotFoundError` | `BookingSessionError` | estabelecimento inexistente ou inativo |
+| `SQLAlchemyError` / `OSError` | `BookingSessionError` | banco fora do ar |
 
-Retry só nos casos idempotentes-seguros — falha de conexão, timeout
-(`connect` / `read` / `write` / `pool`) e `5xx`: até 3 tentativas, backoff
-exponencial a partir de 200 ms. `4xx` nunca é repetido. Repetir a emissão é
-seguro: o AgendaBot resolve o cliente pelo telefone e não duplica cadastro. O
-`connect` usa `AGENT_HTTP__CONNECT_TIMEOUT_SECONDS`; o resto, `AGENT_HTTP__TIMEOUT_SECONDS`.
-Quadro completo em [`09-configuracao.md`](09-configuracao.md#96-política-de-retry-e-timeout-por-adapter).
-
-O `X-Service-Key` só existe dentro de `infrastructure/agendabot/` — nunca é logado,
-nunca entra em mensagem de erro, nunca chega ao LLM.
+Nenhuma exceção de banco passa do adapter para cima.
 
 ## 5.2 Carregamento das tools
 

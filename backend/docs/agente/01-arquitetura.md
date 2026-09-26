@@ -68,9 +68,9 @@ agente-agenda/
 │   │       └── reset_conversation.py
 │   │
 │   ├── infrastructure/
-│   │   ├── agendabot/
-│   │   │   ├── http_client.py        # AsyncClient configurado
-│   │   │   ├── session_issuer.py     # POST /api/agent/{id}/sessions
+│   │   ├── booking/
+│   │   │   └── session_issuer.py     # CustomerSessionIssuer no próprio processo
+│   │   ├── mcp_client/
 │   │   │   └── tool_provider.py      # langchain-mcp-adapters → tools autenticadas
 │   │   ├── llm/
 │   │   │   └── factory.py            # build_chat_model() por provider
