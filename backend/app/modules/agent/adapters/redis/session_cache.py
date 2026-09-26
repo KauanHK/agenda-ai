@@ -1,6 +1,7 @@
 """Cache do token de sessão no Redis.
 
-Chave: `agente:session:{sha256(phone)}` — o telefone nunca vai em claro na chave.
+Chave: `agente:session:{establishment_id}:{sha256(phone)}` — o telefone nunca vai
+em claro na chave, e o mesmo telefone em dois estabelecimentos são duas sessões.
 Ao contrário do checkpointer, uma falha de Redis aqui degrada performance, não
 funcionalidade: `get` devolve `None`, `put` não levanta, e ambos logam em
 `warning`. O `BookingSessionProvider` apenas reemite o token.
@@ -38,22 +39,22 @@ class RedisSessionTokenCache:
         self._clock = clock
         self._refresh_margin_seconds = refresh_margin_seconds
 
-    async def get(self, phone: str) -> BookingSession | None:
-        """Devolve a sessão cacheada para o telefone, ou `None` em miss/falha."""
+    async def get(self, establishment_id: uuid.UUID, phone: str) -> BookingSession | None:
+        """Devolve a sessão cacheada do telefone no estabelecimento, ou `None` em miss/falha."""
         try:
-            raw = await self._client.get(_key_for(phone))
+            raw = await self._client.get(_key_for(establishment_id, phone))
         except RedisError:
             logger.warning("Cache de sessão indisponível na leitura", exc_info=True)
             return None
         if raw is None:
             return None
-        return _decode(raw, phone)
+        return _decode(raw, establishment_id, phone)
 
     async def put(self, session: BookingSession) -> None:
         """Guarda a sessão com um TTL que expira antes do token real."""
         try:
             await self._client.set(
-                _key_for(session.phone),
+                _key_for(session.establishment_id, session.phone),
                 _encode(session),
                 ex=self._ttl_seconds(session),
             )
@@ -66,8 +67,8 @@ class RedisSessionTokenCache:
         return max(_MIN_TTL_SECONDS, int(remaining - self._refresh_margin_seconds))
 
 
-def _key_for(phone: str) -> str:
-    return f"{_KEY_PREFIX}{hashlib.sha256(phone.encode()).hexdigest()}"
+def _key_for(establishment_id: uuid.UUID, phone: str) -> str:
+    return f"{_KEY_PREFIX}{establishment_id}:{hashlib.sha256(phone.encode()).hexdigest()}"
 
 
 def _encode(session: BookingSession) -> str:
@@ -82,10 +83,11 @@ def _encode(session: BookingSession) -> str:
     )
 
 
-def _decode(raw: bytes | str, phone: str) -> BookingSession:
+def _decode(raw: bytes | str, establishment_id: uuid.UUID, phone: str) -> BookingSession:
     data = json.loads(raw)
     return BookingSession(
         token=data["token"],
+        establishment_id=establishment_id,
         phone=phone,
         client_id=uuid.UUID(data["client_id"]),
         client_name=data["client_name"],

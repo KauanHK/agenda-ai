@@ -34,7 +34,6 @@ def _establishments(*, active: bool = True, exists: bool = True) -> AsyncMock:
 def _issuer(clients: AsyncMock, establishments: AsyncMock | None = None) -> InProcessSessionIssuer:
     establishments = establishments or _establishments()
     return InProcessSessionIssuer(
-        establishment_id=_ESTABLISHMENT_ID,
         clock=lambda: _NOW,
         uow_factory=lambda: FakeBookingUnitOfWork(
             clients=clients, establishments=establishments
@@ -54,8 +53,9 @@ async def test_emite_a_sessao_do_cliente_existente() -> None:
     clients = _clients(name="Maria")
     client = clients.get_by_establishment_and_phone.return_value
 
-    session = await _issuer(clients).issue(_PHONE, "Maria")
+    session = await _issuer(clients).issue(_ESTABLISHMENT_ID, _PHONE, "Maria")
 
+    assert session.establishment_id == _ESTABLISHMENT_ID
     assert session.phone == _PHONE
     assert session.client_id == client.id
     assert session.client_name == "Maria"
@@ -63,7 +63,9 @@ async def test_emite_a_sessao_do_cliente_existente() -> None:
     assert session.expires_at == _NOW + timedelta(
         minutes=settings.MCP_SESSION_TOKEN_EXPIRES_MINUTES
     )
-    assert decode_client_mcp_session_token(session.token)["client_id"] == client.id
+    claims = decode_client_mcp_session_token(session.token)
+    assert claims["client_id"] == client.id
+    assert claims["establishment_id"] == _ESTABLISHMENT_ID
 
 
 async def test_cliente_novo_e_repassado() -> None:
@@ -71,19 +73,19 @@ async def test_cliente_novo_e_repassado() -> None:
     clients.create.return_value = clients.get_by_establishment_and_phone.return_value
     clients.get_by_establishment_and_phone.return_value = None
 
-    session = await _issuer(clients).issue(_PHONE, "João")
+    session = await _issuer(clients).issue(_ESTABLISHMENT_ID, _PHONE, "João")
 
     assert session.is_new_client is True
 
 
 async def test_cliente_inativo_vira_client_blocked() -> None:
     with pytest.raises(ClientBlockedError):
-        await _issuer(_clients(is_active=False)).issue(_PHONE, None)
+        await _issuer(_clients(is_active=False)).issue(_ESTABLISHMENT_ID, _PHONE, None)
 
 
 async def test_telefone_invalido_vira_invalid_phone() -> None:
     with pytest.raises(InvalidPhoneError):
-        await _issuer(_clients()).issue("12", None)
+        await _issuer(_clients()).issue(_ESTABLISHMENT_ID, "12", None)
 
 
 @pytest.mark.parametrize(
@@ -95,7 +97,7 @@ async def test_estabelecimento_indisponivel_vira_booking_session_error(
     establishments: AsyncMock,
 ) -> None:
     with pytest.raises(BookingSessionError) as exc_info:
-        await _issuer(_clients(), establishments).issue(_PHONE, None)
+        await _issuer(_clients(), establishments).issue(_ESTABLISHMENT_ID, _PHONE, None)
 
     assert type(exc_info.value) is BookingSessionError
 
@@ -110,7 +112,7 @@ async def test_falha_de_infra_vira_booking_session_error(error: Exception) -> No
     clients.get_by_establishment_and_phone.side_effect = error
 
     with pytest.raises(BookingSessionError) as exc_info:
-        await _issuer(clients).issue(_PHONE, None)
+        await _issuer(clients).issue(_ESTABLISHMENT_ID, _PHONE, None)
 
     assert type(exc_info.value) is BookingSessionError
 
@@ -122,7 +124,7 @@ async def test_conflito_tenta_de_novo_uma_vez_e_emite() -> None:
     clients.get_by_establishment_and_phone.side_effect = [None, existing]
     clients.create.side_effect = IntegrityError("INSERT", {}, Exception("dup"))
 
-    session = await _issuer(clients).issue(_PHONE, None)
+    session = await _issuer(clients).issue(_ESTABLISHMENT_ID, _PHONE, None)
 
     assert session.client_id == existing.id
     assert session.is_new_client is False
@@ -135,7 +137,7 @@ async def test_conflito_repetido_vira_booking_session_error() -> None:
     clients.create.side_effect = IntegrityError("INSERT", {}, Exception("dup"))
 
     with pytest.raises(BookingSessionError) as exc_info:
-        await _issuer(clients).issue(_PHONE, None)
+        await _issuer(clients).issue(_ESTABLISHMENT_ID, _PHONE, None)
 
     assert type(exc_info.value) is BookingSessionError
     assert clients.create.await_count == 2

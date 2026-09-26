@@ -1,5 +1,6 @@
 """Caso de uso: obter uma sessão válida para o contato, reaproveitando o cache."""
 
+import uuid
 from collections.abc import Callable
 from datetime import datetime, timedelta
 
@@ -32,15 +33,15 @@ class BookingSessionProvider:
         self._clock = clock
         self._refresh_margin_seconds = refresh_margin_seconds
 
-    async def for_contact(self, contact: Contact) -> BookingSession:
+    async def for_contact(self, contact: Contact, establishment_id: uuid.UUID) -> BookingSession:
         """Resolve o telefone, tenta o cache e emite uma sessão nova se preciso."""
         phone = self._phone_resolver.resolve(contact.channel, contact.channel_user_id)
         usable_until = self._clock() + timedelta(seconds=self._refresh_margin_seconds)
 
-        cached = await self._cache.get(phone)
+        cached = await self._cache.get(establishment_id, phone)
         if cached is not None and cached.is_valid_at(usable_until):
             return cached
 
-        session = await self._issuer.issue(phone, contact.display_name)
+        session = await self._issuer.issue(establishment_id, phone, contact.display_name)
         await self._cache.put(session)
         return session

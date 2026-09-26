@@ -1,5 +1,7 @@
 """Testes de `CheckpointerConversationHistory` contra um saver dublê."""
 
+import uuid
+
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
@@ -9,7 +11,8 @@ from app.modules.agent.adapters.redis.conversation_history import (
 from app.modules.agent.domain.entities import Channel, ConversationRef
 from app.modules.agent.domain.exceptions import ConversationStateError
 
-_REF = ConversationRef(Channel.TELEGRAM, "42")
+_ESTABLISHMENT_ID = uuid.UUID("01a04f64-0000-7000-8000-00000000e001")
+_REF = ConversationRef(Channel.TELEGRAM, _ESTABLISHMENT_ID, "42")
 
 
 class _StubSaver:
@@ -30,7 +33,7 @@ async def test_apaga_a_thread_no_checkpointer() -> None:
 
     await CheckpointerConversationHistory(saver).clear(_REF)  # type: ignore[arg-type]
 
-    assert saver.deleted == ["telegram:42"]
+    assert saver.deleted == [f"telegram:{_ESTABLISHMENT_ID}:42"]
 
 
 async def test_falha_de_redis_vira_conversation_state_error() -> None:

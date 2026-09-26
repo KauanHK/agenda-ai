@@ -3,6 +3,7 @@
 import logging
 import uuid
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -17,6 +18,8 @@ from app.modules.agent.domain.entities import (
     BookingSession,
     Channel,
     Contact,
+    ConversationRef,
+    Establishment,
     IncomingMessage,
 )
 from app.modules.agent.domain.exceptions import (
@@ -33,6 +36,9 @@ from tests.modules.agent.fakes.tool_provider import FakeToolProvider
 
 _NOW = datetime(2026, 8, 30, 9, 0, tzinfo=UTC)
 _PHONE = "5547999123456"
+_ESTABLISHMENT_ID = uuid.UUID("01a04f64-0000-7000-8000-00000000e001")
+_ESTABLISHMENT = Establishment(id=_ESTABLISHMENT_ID, timezone=ZoneInfo("America/Manaus"))
+_REF = ConversationRef(Channel.TELEGRAM, _ESTABLISHMENT_ID, "42")
 
 
 def _contact() -> Contact:
@@ -46,6 +52,7 @@ def _contact() -> Contact:
 
 def _message(text: str = "quero marcar um horário") -> IncomingMessage:
     return IncomingMessage(
+        establishment=_ESTABLISHMENT,
         contact=_contact(),
         text=text,
         channel_message_id="1001",
@@ -56,6 +63,7 @@ def _message(text: str = "quero marcar um horário") -> IncomingMessage:
 def _session() -> BookingSession:
     return BookingSession(
         token="jwt-da-sessao",
+        establishment_id=_ESTABLISHMENT_ID,
         phone=_PHONE,
         client_id=uuid.UUID("01a04f64-0000-7000-8000-000000000000"),
         client_name="Kauan Kaestner",
@@ -100,8 +108,8 @@ async def test_caminho_feliz_envia_uma_resposta_uma_vez() -> None:
 
     await _handler(agent=agent, messenger=messenger).execute(_message())
 
-    assert messenger.sent == [(_contact(), "Confirmado para amanhã às 14h.")]
-    assert messenger.typing_signals == [_contact()]
+    assert messenger.sent == [(_REF, "Confirmado para amanhã às 14h.")]
+    assert messenger.typing_signals == [_REF]
 
 
 async def test_passa_tools_da_sessao_e_o_contexto_do_turno_ao_agente() -> None:
@@ -111,12 +119,15 @@ async def test_passa_tools_da_sessao_e_o_contexto_do_turno_ao_agente() -> None:
     await _handler(agent=agent, tool_provider=tool_provider).execute(_message("oi"))
 
     (conversation, user_text, tools, context) = agent.calls[0]
-    assert conversation.thread_id == "telegram:42"
+    assert conversation == _REF
     assert user_text == "oi"
     assert list(tools) == ["list_services", "create_scheduling"]
     assert tool_provider.tokens == ["jwt-da-sessao"]
     assert context.client_name == "Kauan Kaestner"
     assert context.now == _NOW
+    # O relógio é UTC; o prompt vê a hora no fuso do estabelecimento da mensagem.
+    assert context.now.tzinfo == ZoneInfo("America/Manaus")
+    assert context.now.hour == 5
     assert context.is_new_client is True
 
 
@@ -131,7 +142,7 @@ async def test_booking_session_error_responde_ao_cliente_e_nao_roda_o_agente() -
         messenger=messenger,
     ).execute(_message())
 
-    assert messenger.sent == [(_contact(), AgentError.user_message)]
+    assert messenger.sent == [(_REF, AgentError.user_message)]
     assert agent.calls == []
 
 
@@ -144,7 +155,7 @@ async def test_client_blocked_error_usa_a_mensagem_especifica() -> None:
         messenger=messenger,
     ).execute(_message())
 
-    assert messenger.sent == [(_contact(), ClientBlockedError.user_message)]
+    assert messenger.sent == [(_REF, ClientBlockedError.user_message)]
 
 
 async def test_erro_inesperado_no_runner_responde_frase_padrao_sem_vazar(
@@ -156,7 +167,7 @@ async def test_erro_inesperado_no_runner_responde_frase_padrao_sem_vazar(
     with caplog.at_level(logging.ERROR):
         await _handler(agent=agent, messenger=messenger).execute(_message())
 
-    assert messenger.sent == [(_contact(), AgentError.user_message)]
+    assert messenger.sent == [(_REF, AgentError.user_message)]
     assert "token secreto" not in messenger.sent[0][1]
     assert any(record.exc_info for record in caplog.records)
 
@@ -167,4 +178,4 @@ async def test_falha_em_signal_typing_nao_impede_a_resposta() -> None:
 
     await _handler(agent=agent, messenger=messenger).execute(_message())
 
-    assert messenger.sent == [(_contact(), "Beleza!")]
+    assert messenger.sent == [(_REF, "Beleza!")]

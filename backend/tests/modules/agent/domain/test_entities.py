@@ -1,7 +1,9 @@
 """Testes das entidades do domínio."""
 
 import dataclasses
+import uuid
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 
@@ -11,27 +13,33 @@ from app.modules.agent.domain.entities import (
     Channel,
     Contact,
     ConversationRef,
+    Establishment,
     IncomingMessage,
 )
 
+_ESTABLISHMENT_A = uuid.UUID("01a04f64-0000-7000-8000-00000000e001")
+_ESTABLISHMENT_B = uuid.UUID("01a04f64-0000-7000-8000-00000000e002")
+
 
 class TestConversationRef:
-    def test_thread_id_tem_o_prefixo_do_canal(self) -> None:
-        ref = ConversationRef(channel=Channel.TELEGRAM, channel_user_id="123456")
-        assert ref.thread_id == "telegram:123456"
+    def test_thread_id_tem_canal_estabelecimento_e_usuario(self) -> None:
+        ref = ConversationRef(
+            channel=Channel.TELEGRAM,
+            establishment_id=_ESTABLISHMENT_A,
+            channel_user_id="123456",
+        )
+        assert ref.thread_id == f"telegram:{_ESTABLISHMENT_A}:123456"
 
     def test_thread_id_e_estavel_para_a_mesma_conversa(self) -> None:
-        a = ConversationRef(Channel.TELEGRAM, "999")
-        b = ConversationRef(Channel.TELEGRAM, "999")
+        a = ConversationRef(Channel.TELEGRAM, _ESTABLISHMENT_A, "999")
+        b = ConversationRef(Channel.TELEGRAM, _ESTABLISHMENT_A, "999")
         assert a.thread_id == b.thread_id
 
-    def test_thread_id_isola_por_canal(self) -> None:
-        # Hoje só existe TELEGRAM; o prefixo de canal garante que a mesma id de
-        # usuário em outro canal nunca caia na mesma thread.
-        ref = ConversationRef(Channel.TELEGRAM, "42")
-        canal, _, resto = ref.thread_id.partition(":")
-        assert canal == Channel.TELEGRAM.value
-        assert resto == "42"
+    def test_thread_id_isola_por_estabelecimento(self) -> None:
+        # No Telegram, o `chat_id` privado é o id do usuário, igual em todos os bots.
+        a = ConversationRef(Channel.TELEGRAM, _ESTABLISHMENT_A, "42")
+        b = ConversationRef(Channel.TELEGRAM, _ESTABLISHMENT_B, "42")
+        assert a.thread_id != b.thread_id
 
 
 def test_contact_e_imutavel() -> None:
@@ -48,6 +56,7 @@ def test_contact_e_imutavel() -> None:
 def test_incoming_message_guarda_o_contato_e_o_texto() -> None:
     contact = Contact(Channel.TELEGRAM, "1", None, "5547999000001")
     message = IncomingMessage(
+        establishment=Establishment(_ESTABLISHMENT_A, ZoneInfo("America/Sao_Paulo")),
         contact=contact,
         text="quero marcar um horário",
         channel_message_id="10",
@@ -55,6 +64,7 @@ def test_incoming_message_guarda_o_contato_e_o_texto() -> None:
     )
     assert message.contact is contact
     assert message.text == "quero marcar um horário"
+    assert message.conversation == ConversationRef(Channel.TELEGRAM, _ESTABLISHMENT_A, "1")
 
 
 def test_agent_answer_conta_as_tool_calls_do_turno() -> None:

@@ -10,7 +10,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.modules.agent.application.ports.phone_resolver import PhoneResolverProtocol
-from app.modules.agent.domain.entities import Channel, Contact, IncomingMessage
+from app.modules.agent.domain.entities import (
+    Channel,
+    Contact,
+    Establishment,
+    IncomingMessage,
+)
 
 _DEFAULT_MAX_CHARS = 1000
 
@@ -19,6 +24,7 @@ def parse_update(
     payload: Mapping[str, Any],
     phone_resolver: PhoneResolverProtocol,
     *,
+    establishment: Establishment,
     max_chars: int = _DEFAULT_MAX_CHARS,
 ) -> IncomingMessage | None:
     """Traduz o update numa mensagem do domínio, ou devolve `None` se não se aplica.
@@ -28,6 +34,8 @@ def parse_update(
     privadas (grupo, supergrupo, canal).
 
     Mensagens acima de `max_chars` são truncadas antes de seguir para o agente.
+    A mensagem sai com o `establishment` recebido: é o dono do bot que recebeu o
+    update.
     """
     message = payload.get("message")
     if not isinstance(message, Mapping):
@@ -53,6 +61,7 @@ def parse_update(
         phone=phone_resolver.resolve(Channel.TELEGRAM, channel_user_id),
     )
     return IncomingMessage(
+        establishment=establishment,
         contact=contact,
         text=text[:max_chars],
         channel_message_id=str(message["message_id"]),

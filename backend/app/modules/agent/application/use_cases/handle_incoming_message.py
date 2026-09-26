@@ -23,7 +23,6 @@ from app.modules.agent.application.use_cases.open_booking_session import (
 )
 from app.modules.agent.domain.entities import (
     AgentContext,
-    Contact,
     ConversationRef,
     IncomingMessage,
 )
@@ -75,9 +74,10 @@ class HandleIncomingMessage:
         self._tool_provider = tool_provider
         self._agent = agent
         self._messenger = messenger
-        # Devolve o "agora" *timezone-aware* no fuso do estabelecimento — é o que
-        # o system prompt usa para resolver "amanhã", "sexta". Injetado para o
-        # teste controlar o tempo sem `freezegun`, como em `BookingSessionProvider`.
+        # Devolve o "agora" em UTC; o turno o converte para o fuso do
+        # estabelecimento da mensagem, que é o que o system prompt usa para
+        # resolver "amanhã", "sexta". Injetado para o teste controlar o tempo sem
+        # `freezegun`, como em `BookingSessionProvider`.
         self._clock = clock
 
     async def execute(self, message: IncomingMessage) -> None:
@@ -87,18 +87,17 @@ class HandleIncomingMessage:
         é logado com `logger.exception` e responde com a frase padrão — o cliente
         nunca vê stacktrace nem detalhe interno.
         """
-        ref = ConversationRef(
-            channel=message.contact.channel,
-            channel_user_id=message.contact.channel_user_id,
-        )
-        await self._signal_typing(contact=message.contact)
+        ref = message.conversation
+        await self._signal_typing(ref)
         with _guard_answer(ref) as outcome:
             outcome.text = await self._produce_answer(message, ref)
-        await self._messenger.send_text(message.contact, outcome.text)
+        await self._messenger.send_text(ref, outcome.text)
 
     async def _produce_answer(self, message: IncomingMessage, ref: ConversationRef) -> str:
         """Abre a sessão, carrega as tools e roda o turno do agente."""
-        session = await self._session_provider.for_contact(message.contact)
+        session = await self._session_provider.for_contact(
+            message.contact, message.establishment.id
+        )
         tools = await self._tool_provider.tools_for(session.token)
         answer = await self._agent.run(
             conversation=ref,
@@ -106,15 +105,15 @@ class HandleIncomingMessage:
             tools=tools,
             context=AgentContext(
                 client_name=session.client_name,
-                now=self._clock(),
+                now=self._clock().astimezone(message.establishment.timezone),
                 is_new_client=session.is_new_client,
             ),
         )
         return answer.text
 
-    async def _signal_typing(self, contact: Contact) -> None:
+    async def _signal_typing(self, conversation: ConversationRef) -> None:
         """Sinaliza "digitando" sem deixar uma falha aí impedir a resposta."""
         try:
-            await self._messenger.signal_typing(contact)
+            await self._messenger.signal_typing(conversation)
         except Exception:
             logger.debug("signal_typing falhou; seguindo sem o indicador", exc_info=True)

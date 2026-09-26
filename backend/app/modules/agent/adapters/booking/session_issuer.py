@@ -34,21 +34,21 @@ class InProcessSessionIssuer:
     def __init__(
         self,
         *,
-        establishment_id: uuid.UUID,
         clock: Callable[[], datetime],
         uow_factory: Callable[[], BookingUnitOfWorkProtocol] = make_unit_of_work,
     ) -> None:
-        self._establishment_id = establishment_id
         self._clock = clock
         self._uow_factory = uow_factory
 
-    async def issue(self, phone: str, name: str | None) -> BookingSession:
-        """Emite a sessão do cliente a partir do telefone."""
+    async def issue(
+        self, establishment_id: uuid.UUID, phone: str, name: str | None
+    ) -> BookingSession:
+        """Emite a sessão do cliente no estabelecimento a partir do telefone."""
         try:
             try:
-                customer = await self._issue_once(phone, name)
+                customer = await self._issue_once(establishment_id, phone, name)
             except ConflictError:
-                customer = await self._issue_once(phone, name)
+                customer = await self._issue_once(establishment_id, phone, name)
         except ForbiddenError as exc:
             raise ClientBlockedError("Cliente inativo no estabelecimento.") from exc
         except ValueError as exc:
@@ -58,6 +58,7 @@ class InProcessSessionIssuer:
 
         return BookingSession(
             token=customer.token,
+            establishment_id=establishment_id,
             phone=phone,
             client_id=customer.client_id,
             client_name=customer.client_name,
@@ -66,9 +67,11 @@ class InProcessSessionIssuer:
             is_new_client=customer.is_new_client,
         )
 
-    async def _issue_once(self, phone: str, name: str | None) -> CustomerSession:
+    async def _issue_once(
+        self, establishment_id: uuid.UUID, phone: str, name: str | None
+    ) -> CustomerSession:
         return await CustomerSessionIssuer(self._uow_factory()).issue(
-            establishment_id=self._establishment_id,
+            establishment_id=establishment_id,
             phone=phone,
             name=name,
         )

@@ -1,5 +1,6 @@
 """Porta de cache do token de sessão."""
 
+import uuid
 from typing import Protocol
 
 from app.modules.agent.domain.entities import BookingSession
@@ -13,8 +14,8 @@ class SessionTokenCacheProtocol(Protocol):
     `BookingSessionProvider` apenas emite um token novo.
     """
 
-    async def get(self, phone: str) -> BookingSession | None:
-        """Devolve a sessão cacheada e ainda válida para o telefone, ou `None`."""
+    async def get(self, establishment_id: uuid.UUID, phone: str) -> BookingSession | None:
+        """Devolve a sessão cacheada do telefone no estabelecimento, ou `None`."""
         ...
 
     async def put(self, session: BookingSession) -> None:
