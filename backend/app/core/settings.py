@@ -51,6 +51,18 @@ class Settings(BaseSettings):
     # Cifra os segredos dos canais (token do bot do Telegram, segredo do webhook).
     CHANNEL_SECRETS_KEY: str
 
+    # Base HTTPS pública onde o nginx expõe `/webhook/`: o domínio do SaaS em
+    # produção, o túnel em dev. Não é o `FRONTEND_URL` porque em dev os dois diferem.
+    TELEGRAM_WEBHOOK_BASE_URL: str
+
+    @field_validator("TELEGRAM_WEBHOOK_BASE_URL")
+    @classmethod
+    def _validate_telegram_webhook_base_url(cls, value: str) -> str:
+        # O Telegram só entrega webhooks em HTTPS.
+        if not value.startswith("https://"):
+            raise ValueError("TELEGRAM_WEBHOOK_BASE_URL precisa começar com https://.")
+        return value.rstrip("/")
+
     @field_validator("CHANNEL_SECRETS_KEY")
     @classmethod
     def _validate_channel_secrets_key(cls, value: str) -> str:
