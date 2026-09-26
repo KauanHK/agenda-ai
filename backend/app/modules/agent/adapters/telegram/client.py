@@ -40,9 +40,8 @@ def build_telegram_client(
     `https://api.telegram.org`) para permitir apontar o bot a um Local Bot API
     Server ou a um endpoint de teste/staging.
 
-    O token vai na URL porque a Bot API exige (`/bot<token>/<método>`); como o
-    `X-Service-Key` do AgendaBot, ele vive só dentro deste pacote e nunca entra
-    em log nem em mensagem de erro.
+    O token vai na URL porque a Bot API exige (`/bot<token>/<método>`); ele vive
+    só dentro deste pacote e nunca entra em log nem em mensagem de erro.
 
     O teto de leitura é curto (`telegram_read_timeout_seconds`): a Bot API
     responde depressa e um `read` pendurado só atrasa o turno.

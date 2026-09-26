@@ -24,10 +24,10 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from app.modules.agent.adapters.agendabot.http_client import build_agendabot_client
-from app.modules.agent.adapters.agendabot.session_issuer import AgendaBotSessionIssuer
-from app.modules.agent.adapters.agendabot.tool_provider import AgendaBotToolProvider
+from app.core.db.session import db
+from app.modules.agent.adapters.booking.session_issuer import InProcessSessionIssuer
 from app.modules.agent.adapters.identity.synthetic_phone import SyntheticPhoneResolver
+from app.modules.agent.adapters.mcp_client.tool_provider import AgendaBotToolProvider
 from app.modules.agent.domain.entities import Channel
 from app.modules.agent.domain.exceptions import AgentError
 from app.modules.agent.settings import Settings
@@ -108,24 +108,20 @@ async def _run(args: argparse.Namespace, settings: Settings) -> None:
         phone = resolver.resolve(Channel.TELEGRAM, str(args.chat_id))
 
     print(f"Estabelecimento : {settings.agendabot.establishment_id}")
-    print(f"API             : {settings.agendabot.api_url}")
     print(f"MCP             : {settings.agendabot.mcp_url}")
     print(f"Telefone        : {phone}")
     print(f"Nome            : {args.name}")
     print("Emitindo sessão...\n")
 
-    async with build_agendabot_client(
-        base_url=settings.agendabot.api_url,
-        service_key=settings.agendabot.service_key.get_secret_value(),
-        connect_timeout_seconds=settings.http.connect_timeout_seconds,
-        read_timeout_seconds=settings.http.timeout_seconds,
-    ) as client:
-        issuer = AgendaBotSessionIssuer(
-            client,
-            establishment_id=settings.agendabot.establishment_id,
-            clock=lambda: datetime.now(UTC),
-        )
+    issuer = InProcessSessionIssuer(
+        establishment_id=settings.agendabot.establishment_id,
+        clock=lambda: datetime.now(UTC),
+    )
+    db.init()
+    try:
         session = await issuer.issue(phone, str(args.name))
+    finally:
+        await db.close()
 
     token = session.token if args.show_token else _mask(session.token)
     print("Sessão emitida:")
@@ -152,9 +148,6 @@ def main() -> int:
         print("Configuração inválida — preencha o `.env` (veja `.env.example`):\n")
         print(error)
         return 2
-
-    if not settings.agendabot.service_key.get_secret_value():
-        print("AGENT_AGENDABOT__SERVICE_KEY está vazia no `.env`: a emissão vai falhar com 401.\n")
 
     try:
         asyncio.run(_run(args, settings))

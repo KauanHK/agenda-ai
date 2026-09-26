@@ -9,9 +9,7 @@ _ESTABLISHMENT_ID = "01a04f5b-0e84-7530-be67-63f08e7b2269"
 
 # Tudo que não tem default e precisa vir do ambiente.
 _REQUIRED = {
-    "AGENT_AGENDABOT__API_URL": "https://agenda.escaleia.cloud",
     "AGENT_AGENDABOT__MCP_URL": "https://agenda.escaleia.cloud/mcp",
-    "AGENT_AGENDABOT__SERVICE_KEY": "svc-key",
     "AGENT_AGENDABOT__ESTABLISHMENT_ID": _ESTABLISHMENT_ID,
     "AGENT_TELEGRAM__BOT_TOKEN": "tg-token",
     "AGENT_TELEGRAM__WEBHOOK_SECRET": "hook-secret",
@@ -45,10 +43,8 @@ def test_defaults_valem_quando_so_os_obrigatorios_estao_definidos(
     assert settings.llm.model == "claude-sonnet-5"
     assert settings.llm.temperature == pytest.approx(0.3)
     assert str(settings.agendabot.establishment_id) == _ESTABLISHMENT_ID
-    assert settings.agendabot.service_key.get_secret_value() == "svc-key"
     assert settings.telegram.bot_token.get_secret_value() == "tg-token"
     assert settings.conversation.max_history_turns == 10
-    assert settings.http.timeout_seconds == pytest.approx(10.0)
     assert settings.http.connect_timeout_seconds == pytest.approx(5.0)
     assert settings.http.telegram_read_timeout_seconds == pytest.approx(5.0)
 
@@ -57,13 +53,13 @@ def test_grupos_leem_o_prefixo_com_delimitador(monkeypatch: pytest.MonkeyPatch) 
     _set(
         monkeypatch,
         AGENT_LLM__ANTHROPIC_API_KEY="sk-ant",
-        AGENT_AGENDABOT__API_URL="https://exemplo.test",
+        AGENT_AGENDABOT__MCP_URL="https://exemplo.test/mcp",
         AGENT_CONVERSATION__MAX_HISTORY_TURNS="7",
     )
 
     settings = Settings(_env_file=None)
 
-    assert settings.agendabot.api_url == "https://exemplo.test"
+    assert settings.agendabot.mcp_url == "https://exemplo.test/mcp"
     assert settings.conversation.max_history_turns == 7
 
 

@@ -1,9 +1,9 @@
 """
 Identificação do cliente pelo telefone.
 
-É a fronteira de autenticação do canal automático: o orquestrador (que recebe o webhook
-do WhatsApp) troca um telefone por um token de sessão, e é esse token — não o telefone —
-que o agente de IA carrega dali em diante. O LLM nunca vê o número nem o `client_id`.
+É a fronteira de autenticação do canal automático: o agente (que recebe o webhook do
+canal) troca o telefone do contato por um token de sessão, e é esse token — não o
+telefone — que ele carrega dali em diante até o MCP. O LLM nunca vê o número nem o `client_id`.
 """
 
 import uuid

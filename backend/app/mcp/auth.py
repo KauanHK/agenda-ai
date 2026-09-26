@@ -17,7 +17,7 @@ _TOKEN_CLIENT_ID = "agendabot-customer-session"
 
 
 class SessionTokenVerifier(TokenVerifier):
-    """Verifica o token de sessão emitido por `POST /agent/{id}/sessions`."""
+    """Verifica o token de sessão que o agente emite para o cliente."""
 
     async def verify_token(self, token: str) -> AccessToken | None:
         """

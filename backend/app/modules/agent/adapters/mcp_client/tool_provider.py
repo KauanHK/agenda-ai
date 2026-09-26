@@ -1,9 +1,4 @@
-"""Carregamento das tools do MCP server do AgendaBot via `langchain-mcp-adapters`.
-
-Segunda integração com o mesmo host, em arquivo separado da emissão da sessão
-(`session_issuer.py`) porque muda por outro motivo: aqui o contrato é o protocolo
-MCP, não a API HTTP.
-"""
+"""Carregamento das tools do MCP server do AgendaBot via `langchain-mcp-adapters`."""
 
 import asyncio
 from collections.abc import Callable, Sequence

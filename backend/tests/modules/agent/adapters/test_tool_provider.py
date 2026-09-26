@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from app.modules.agent.adapters.agendabot.tool_provider import AgendaBotToolProvider
+from app.modules.agent.adapters.mcp_client.tool_provider import AgendaBotToolProvider
 from app.modules.agent.domain.exceptions import BookingSessionError
 
 _MCP_URL = "https://agenda.test/mcp"
