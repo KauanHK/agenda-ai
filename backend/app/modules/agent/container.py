@@ -39,7 +39,6 @@ from app.modules.agent.adapters.telegram.client import (
 )
 from app.modules.agent.adapters.telegram.update_parser import parse_update
 from app.modules.agent.adapters.telegram.webhook_handler import TelegramWebhookHandler
-from app.modules.agent.adapters.telegram.webhook_registry import TelegramWebhookRegistry
 from app.modules.agent.application.use_cases.handle_incoming_message import (
     HandleIncomingMessage,
 )
@@ -48,9 +47,20 @@ from app.modules.agent.application.use_cases.open_booking_session import (
 )
 from app.modules.agent.application.use_cases.reset_conversation import ResetConversation
 from app.modules.agent.domain.entities import Establishment
+from app.modules.agent.domain.exceptions import WebhookRegistrationError
 from app.modules.agent.settings import Settings
+from app.modules.channels.adapters.telegram.bot_api import (
+    TelegramBotApi,
+    build_bot_api_client,
+)
+from app.modules.channels.domain.exceptions import (
+    InvalidBotTokenError,
+    TelegramApiError,
+)
 
 logger = logging.getLogger(__name__)
+
+WEBHOOK_PATH_TEMPLATE = "/webhook/telegram/{secret}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,7 +184,33 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
         messenger=messenger,
     )
     webhook_secret = settings.telegram.webhook_secret.get_secret_value()
-    webhook_registry = TelegramWebhookRegistry(telegram_client, webhook_secret=webhook_secret)
+    bot_token = settings.telegram.bot_token.get_secret_value()
+    bot_api = TelegramBotApi(
+        await stack.enter_async_context(
+            build_bot_api_client(settings.telegram.api_root)
+        )
+    )
+
+    async def get_webhook_info() -> dict[str, Any]:
+        try:
+            return await bot_api.get_webhook_info(bot_token)
+        except (InvalidBotTokenError, TelegramApiError) as error:
+            raise WebhookRegistrationError(str(error)) from None
+
+    async def register_webhook(
+        base_url: str, drop_pending_updates: bool
+    ) -> dict[str, Any]:
+        try:
+            await bot_api.set_webhook(
+                bot_token,
+                url=webhook_url(base_url, webhook_secret),
+                secret_token=webhook_secret,
+                drop_pending_updates=drop_pending_updates,
+            )
+        except (InvalidBotTokenError, TelegramApiError) as error:
+            raise WebhookRegistrationError(str(error)) from None
+        return await get_webhook_info()
+
     logger.info("Dependências montadas (estabelecimento %s)", establishment.id)
 
     return Container(
@@ -182,8 +218,11 @@ async def _wire(settings: Settings, stack: AsyncExitStack) -> Container:
         webhook_secret=webhook_secret,
         check_readiness=check_readiness,
         admin_token=settings.telegram.admin_token.get_secret_value(),
-        register_webhook=lambda base_url, drop_pending_updates: webhook_registry.register(
-            base_url, drop_pending_updates=drop_pending_updates
-        ),
-        get_webhook_info=webhook_registry.info,
+        register_webhook=register_webhook,
+        get_webhook_info=get_webhook_info,
     )
+
+
+def webhook_url(base_url: str, webhook_secret: str) -> str:
+    """URL completa do webhook a partir da base pública (sem barra dupla)."""
+    return base_url.rstrip("/") + WEBHOOK_PATH_TEMPLATE.format(secret=webhook_secret)

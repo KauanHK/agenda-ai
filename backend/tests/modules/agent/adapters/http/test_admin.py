@@ -1,7 +1,7 @@
 """Testes das rotas `/admin/telegram/webhook` com `TestClient` e um container fake.
 
 O fake registra as chamadas e devolve (ou levanta) o que o teste mandar; o
-Telegram real fica coberto em `tests/infrastructure/telegram/test_webhook_registry.py`.
+Telegram real fica coberto em `tests/modules/channels/adapters/telegram/test_bot_api.py`.
 """
 
 from typing import Any

@@ -24,3 +24,11 @@ class TelegramBot:
     webhook_secret: str = field(repr=False)
     created_at: datetime
     updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class BotIdentity:
+    """O que o `getMe` devolve de útil: o id numérico e o `@username` do bot."""
+
+    id: int
+    username: str
