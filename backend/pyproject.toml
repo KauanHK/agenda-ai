@@ -57,7 +57,7 @@ asyncio_mode = "auto"
 [tool.ruff]
 line-length = 88
 target-version = "py314"
-extend-exclude = ["alembic/versions"]
+extend-exclude = ["migrations/versions"]
 
 [tool.ruff.lint]
 select = [

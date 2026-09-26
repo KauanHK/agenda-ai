@@ -3,21 +3,21 @@ import uuid
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-import app.db.models  # noqa: F401
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import app.db.models  # noqa: F401
 from app.celery_app import celery
 from app.db.session import db
 from app.integrations.evolution import EvolutionAPIError, send_text
 from app.modules.clients.domain.model import Client
 from app.modules.messaging_templates.domain.model import MessagingTemplate
-from app.modules.schedulings.domain.model import Scheduling
 from app.modules.scheduling_notifications.domain.enums import NotificationStatus
 from app.modules.scheduling_notifications.domain.model import SchedulingNotification
 from app.modules.scheduling_notifications.infra.repository import (
     SchedulingNotificationsRepository,
 )
+from app.modules.schedulings.domain.model import Scheduling
 from app.modules.services.domain.model import Service
 
 _TZ = ZoneInfo("America/Sao_Paulo")
@@ -44,9 +44,8 @@ def send_notification(notification_id: str) -> None:
 
 async def _run_send(notification_id: uuid.UUID) -> None:
     db.init()
-    async with db.create_session() as session:
-        async with session.begin():
-            await _send_notification(notification_id, session)
+    async with db.create_session() as session, session.begin():
+        await _send_notification(notification_id, session)
 
 
 async def _send_notification(notification_id: uuid.UUID, session: AsyncSession) -> None:

@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from app.core.pagination import (
     PaginatedResponse,
@@ -29,17 +30,17 @@ def test_pagination_params_offset_custom_size():
 
 
 def test_pagination_params_invalid_page():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         PaginationParams(page=0)
 
 
 def test_pagination_params_invalid_size_zero():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         PaginationParams(size=0)
 
 
 def test_pagination_params_invalid_size_above_limit():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         PaginationParams(size=101)
 
 
