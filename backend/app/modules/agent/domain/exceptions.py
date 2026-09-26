@@ -38,5 +38,9 @@ class WebhookRegistrationError(AgentError):
     """O canal recusou registrar ou informar o webhook."""
 
 
+class ChannelLookupError(AgentError):
+    """Não foi possível consultar qual canal atende o estabelecimento."""
+
+
 class InvalidPhoneError(AgentError):
     """O telefone do contato não pôde ser determinado."""
