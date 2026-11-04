@@ -202,6 +202,27 @@ services:
     <<: *backend
     command: uv run --no-sync celery -A app.celery_app beat --loglevel=info
 
+  backup:
+    # Mesma major do banco: o pg_dump precisa acompanhar o servidor.
+    image: postgres:17-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    env_file: ./.env
+    environment:
+      - POSTGRES_HOST=db
+      - BACKUP_RETENTION_DAYS=14
+    volumes:
+      - ./backup/run.sh:/backup.sh:ro
+      - ./backups:/backups
+    # entrypoint (e não command) para não passar pelo docker-entrypoint.sh da
+    # imagem do Postgres, que espera iniciar um servidor.
+    entrypoint: ["sh", "/backup.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+
 networks:
   backend:
     internal: true

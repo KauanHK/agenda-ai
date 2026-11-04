@@ -46,3 +46,6 @@ wheels/
 .mypy_cache
 .pytest_cache
 .ruff_cache
+
+# Dumps do banco (VPS)
+backups/
