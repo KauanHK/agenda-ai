@@ -17,6 +17,12 @@
 # Para subir/testar localmente use docker-compose.local.yml.
 # ─────────────────────────────────────────────────────────────────────────────
 
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 x-backend: &backend
   image: ${IMAGE_BACKEND:-ghcr.io/kauanhk/agenda-ai-backend}:latest
   build:
@@ -25,6 +31,7 @@ x-backend: &backend
     args:
       BUILDKIT_INLINE_CACHE: "1"
   restart: unless-stopped
+  logging: *default-logging
   env_file: ./.env
   networks:
     - backend
@@ -41,6 +48,7 @@ services:
     image: nginx:1.27-alpine
     container_name: agenda-bot
     restart: unless-stopped
+    logging: *default-logging
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
@@ -67,12 +75,14 @@ services:
       args:
         VITE_API_URL: /api
     restart: unless-stopped
+    logging: *default-logging
     networks:
       - backend
 
   db:
     image: postgres:17-alpine
     restart: unless-stopped
+    logging: *default-logging
     env_file: ./.env
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -87,6 +97,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *default-logging
     env_file: ./.env
     command: >
       sh -c 'redis-server --requirepass "$$REDIS_PASSWORD" --save "" --appendonly no'
@@ -168,6 +179,7 @@ services:
   agent-redis:
     image: redis:8-alpine
     restart: unless-stopped
+    logging: *default-logging
     command: redis-server --appendonly yes
     volumes:
       - agentredis:/data
@@ -189,6 +201,27 @@ services:
   beat:
     <<: *backend
     command: uv run --no-sync celery -A app.celery_app beat --loglevel=info
+
+  backup:
+    # Mesma major do banco: o pg_dump precisa acompanhar o servidor.
+    image: postgres:17-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    env_file: ./.env
+    environment:
+      - POSTGRES_HOST=db
+      - BACKUP_RETENTION_DAYS=14
+    volumes:
+      - ./backup/run.sh:/backup.sh:ro
+      - ./backups:/backups
+    # entrypoint (e não command) para não passar pelo docker-entrypoint.sh da
+    # imagem do Postgres, que espera iniciar um servidor.
+    entrypoint: ["sh", "/backup.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
 
 networks:
   backend:
